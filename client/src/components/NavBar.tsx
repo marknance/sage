@@ -17,24 +17,27 @@ export default function NavBar() {
   const user = useAuthStore((s) => s.user);
   const { theme, toggle, init } = useThemeStore();
   const [health, setHealth] = useState<'ok' | 'error' | 'checking'>('checking');
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => { init(); }, [init]);
 
+  // Close mobile menu on navigation
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    // Ctrl/Cmd+K — focus search on conversations page
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
       e.preventDefault();
       if (location.pathname !== '/conversations') {
         navigate('/conversations');
       }
-      // Focus the search input after navigation
       setTimeout(() => {
         const input = document.querySelector<HTMLInputElement>('input[placeholder*="Search conversations"]');
         input?.focus();
         input?.select();
       }, 100);
     }
-    // Escape — close topmost modal (any element with z-50 fixed overlay)
     if (e.key === 'Escape') {
       const modal = document.querySelector('.fixed.inset-0.z-50');
       if (modal) {
@@ -63,73 +66,115 @@ export default function NavBar() {
     return () => clearInterval(id);
   }, []);
 
+  const allItems = [
+    ...NAV_ITEMS,
+    ...(user?.role === 'admin' ? [{ to: '/admin', label: 'Admin' }] : []),
+  ];
+
   return (
-    <nav className="h-14 bg-surface border-b border-border flex items-center px-4 shrink-0">
-      <Link to="/" className="text-lg font-semibold text-text-primary mr-8 flex items-center gap-2">
-        Sage
-        <span
-          className={`inline-block w-2 h-2 rounded-full ${
-            health === 'ok' ? 'bg-green-500' : health === 'error' ? 'bg-red-500' : 'bg-gray-400 animate-pulse'
-          }`}
-          title={health === 'ok' ? 'Server connected' : health === 'error' ? 'Server connection lost' : 'Checking server...'}
-        />
-      </Link>
-      <div className="flex gap-1">
-        {NAV_ITEMS.map((item) => {
-          const active = location.pathname.startsWith(item.to);
-          return (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                active
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-background'
-              }`}
-            >
-              {item.label}
-            </Link>
-          );
-        })}
-        {user?.role === 'admin' && (
-          <Link
-            to="/admin"
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              location.pathname.startsWith('/admin')
-                ? 'bg-primary/10 text-primary'
-                : 'text-text-secondary hover:text-text-primary hover:bg-background'
+    <nav className="bg-surface border-b border-border shrink-0 relative">
+      <div className="h-14 flex items-center px-4">
+        <Link to="/" className="text-lg font-semibold text-text-primary mr-8 flex items-center gap-2">
+          Sage
+          <span
+            className={`inline-block w-2 h-2 rounded-full ${
+              health === 'ok' ? 'bg-green-500' : health === 'error' ? 'bg-red-500' : 'bg-gray-400 animate-pulse'
             }`}
+            title={health === 'ok' ? 'Server connected' : health === 'error' ? 'Server connection lost' : 'Checking server...'}
+          />
+        </Link>
+
+        {/* Desktop nav */}
+        <div className="hidden md:flex gap-1">
+          {allItems.map((item) => {
+            const active = location.pathname.startsWith(item.to);
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  active
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-background'
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
+
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => {
+              if (location.pathname !== '/conversations') navigate('/conversations');
+              setTimeout(() => {
+                const input = document.querySelector<HTMLInputElement>('input[placeholder*="Search conversations"]');
+                input?.focus();
+                input?.select();
+              }, 100);
+            }}
+            className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-lg border border-border text-text-muted text-xs hover:text-text-secondary hover:border-border transition-colors"
+            title="Search conversations (Ctrl+K)"
           >
-            Admin
-          </Link>
-        )}
+            Search
+            <kbd className="px-1 py-0.5 rounded bg-background border border-border text-[10px]">
+              {navigator.platform?.includes('Mac') ? '\u2318' : 'Ctrl'}K
+            </kbd>
+          </button>
+          <button
+            onClick={toggle}
+            className="px-2 py-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-background transition-colors text-sm"
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {theme === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19'}
+          </button>
+
+          {/* Mobile hamburger */}
+          <button
+            onClick={() => setMobileOpen(!mobileOpen)}
+            className="md:hidden px-2 py-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-background transition-colors"
+            aria-label="Toggle navigation menu"
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              {mobileOpen ? (
+                <>
+                  <line x1="4" y1="4" x2="16" y2="16" />
+                  <line x1="16" y1="4" x2="4" y2="16" />
+                </>
+              ) : (
+                <>
+                  <line x1="3" y1="5" x2="17" y2="5" />
+                  <line x1="3" y1="10" x2="17" y2="10" />
+                  <line x1="3" y1="15" x2="17" y2="15" />
+                </>
+              )}
+            </svg>
+          </button>
+        </div>
       </div>
-      <div className="ml-auto flex items-center gap-2">
-        <button
-          onClick={() => {
-            if (location.pathname !== '/conversations') navigate('/conversations');
-            setTimeout(() => {
-              const input = document.querySelector<HTMLInputElement>('input[placeholder*="Search conversations"]');
-              input?.focus();
-              input?.select();
-            }, 100);
-          }}
-          className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-lg border border-border text-text-muted text-xs hover:text-text-secondary hover:border-border transition-colors"
-          title="Search conversations (Ctrl+K)"
-        >
-          Search
-          <kbd className="px-1 py-0.5 rounded bg-background border border-border text-[10px]">
-            {navigator.platform?.includes('Mac') ? '\u2318' : 'Ctrl'}K
-          </kbd>
-        </button>
-        <button
-          onClick={toggle}
-          className="px-2 py-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-background transition-colors text-sm"
-          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-        >
-          {theme === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19'}
-        </button>
-      </div>
+
+      {/* Mobile dropdown */}
+      {mobileOpen && (
+        <div className="md:hidden border-t border-border bg-surface px-4 py-2 flex flex-col gap-1">
+          {allItems.map((item) => {
+            const active = location.pathname.startsWith(item.to);
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  active
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-background'
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
     </nav>
   );
 }
