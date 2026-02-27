@@ -21,6 +21,12 @@ export default function ExpertsPage() {
           <h1 className="text-2xl font-semibold text-text-primary">Experts</h1>
           <div className="flex gap-3">
             <Link
+              to="/backends"
+              className="px-4 py-2 rounded-lg border border-border text-text-secondary hover:text-text-primary transition-colors"
+            >
+              Backends
+            </Link>
+            <Link
               to="/profile"
               className="px-4 py-2 rounded-lg border border-border text-text-secondary hover:text-text-primary transition-colors"
             >

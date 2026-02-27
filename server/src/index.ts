@@ -10,6 +10,7 @@ import authRouter from './routes/auth.js';
 import expertsRouter from './routes/experts.js';
 import categoriesRouter from './routes/categories.js';
 import conversationsRouter from './routes/conversations.js';
+import backendsRouter from './routes/backends.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -175,6 +176,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/experts', expertsRouter);
 app.use('/api/categories', categoriesRouter);
 app.use('/api/conversations', conversationsRouter);
+app.use('/api/backends', backendsRouter);
 
 // Health endpoint
 app.get('/api/health', (_req, res) => {

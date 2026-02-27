@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { db } from '../index.js';
 import { authenticate } from '../middleware/auth.js';
-import { chatCompletion, buildSystemPrompt } from '../services/ollama.js';
+import { chatCompletion, buildSystemPrompt, resolveBackendConfig } from '../services/ollama.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -257,7 +257,12 @@ router.post('/:id/messages', async (req, res) => {
         ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
       ];
 
-      const reply = await chatCompletion({ messages });
+      // Resolve default backend for no-expert responses
+      const userSettings = db.prepare('SELECT default_backend_id FROM settings WHERE user_id = ?')
+        .get(req.user!.id) as { default_backend_id: number | null } | undefined;
+      const defaultBackend = resolveBackendConfig(null, userSettings?.default_backend_id, db);
+
+      const reply = await chatCompletion({ messages, backend: defaultBackend });
 
       const result = db.prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)')
         .run(req.params.id, 'assistant', reply);
@@ -271,7 +276,7 @@ router.post('/:id/messages', async (req, res) => {
     } else if (!conversation.expert_debate_enabled) {
       // Single expert responds (first assigned)
       const expert = assignedExperts[0];
-      const reply = await getExpertResponse(expert, history, req.params.id);
+      const reply = await getExpertResponse(expert, history, req.params.id, req.user!.id);
 
       const result = db.prepare('INSERT INTO messages (conversation_id, expert_id, role, content) VALUES (?, ?, ?, ?)')
         .run(req.params.id, expert.id, 'assistant', reply);
@@ -291,7 +296,7 @@ router.post('/:id/messages', async (req, res) => {
           ORDER BY created_at ASC
         `).all(req.params.id) as { role: string; content: string }[];
 
-        const reply = await getExpertResponse(expert, currentHistory, req.params.id);
+        const reply = await getExpertResponse(expert, currentHistory, req.params.id, req.user!.id);
 
         const result = db.prepare('INSERT INTO messages (conversation_id, expert_id, role, content) VALUES (?, ?, ?, ?)')
           .run(req.params.id, expert.id, 'assistant', reply);
@@ -316,7 +321,8 @@ router.post('/:id/messages', async (req, res) => {
 async function getExpertResponse(
   expert: any,
   history: { role: string; content: string }[],
-  conversationId: string
+  conversationId: string,
+  userId: number
 ): Promise<string> {
   const behaviors = db.prepare('SELECT behavior_key FROM expert_behaviors WHERE expert_id = ? AND enabled = 1')
     .all(expert.id) as { behavior_key: string }[];
@@ -335,7 +341,12 @@ async function getExpertResponse(
     ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
   ];
 
-  return chatCompletion({ messages, model: expert.model_override || undefined });
+  // Resolve backend: expert → user default → env fallback
+  const userSettings = db.prepare('SELECT default_backend_id FROM settings WHERE user_id = ?')
+    .get(userId) as { default_backend_id: number | null } | undefined;
+  const backend = resolveBackendConfig(expert.backend_id, userSettings?.default_backend_id, db);
+
+  return chatCompletion({ messages, model: expert.model_override || undefined, backend });
 }
 
 function findSuggestedExperts(userId: number, messageContent: string, excludeExperts: any[]): any[] {
