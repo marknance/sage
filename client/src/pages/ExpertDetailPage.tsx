@@ -54,6 +54,7 @@ export default function ExpertDetailPage() {
   const [deleteWarning, setDeleteWarning] = useState<{ conversation_count: number; message_count: number } | null>(null);
   const [memoryType, setMemoryType] = useState('fact');
   const [memoryContent, setMemoryContent] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [addCategoryId, setAddCategoryId] = useState('');
 
   const expertId = Number(id);
@@ -89,6 +90,14 @@ export default function ExpertDetailPage() {
   }, [currentExpert]);
 
   async function handleSave() {
+    const errs: Record<string, string> = {};
+    if (!editForm.name.trim() || editForm.name.trim().length > 100) errs.name = 'Name is required (1-100 characters)';
+    if (!editForm.domain.trim() || editForm.domain.trim().length > 200) errs.domain = 'Domain is required (1-200 characters)';
+    if (editForm.description.length > 1000) errs.description = 'Description must be under 1000 characters';
+    if (editForm.system_prompt.length > 10000) errs.system_prompt = 'System prompt must be under 10000 characters';
+    setFieldErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
     await updateExpert(expertId, {
       ...editForm,
       description: editForm.description || null,
@@ -232,8 +241,9 @@ export default function ExpertDetailPage() {
                   type="text"
                   value={editForm.name}
                   onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+                  className={`w-full px-3 py-2 rounded-lg bg-background border text-text-primary focus:outline-none focus:border-primary ${fieldErrors.name ? 'border-destructive' : 'border-border'}`}
                 />
+                {fieldErrors.name && <p className="text-xs text-destructive mt-1">{fieldErrors.name}</p>}
               </div>
               <div>
                 <label className="block text-sm text-text-secondary mb-1.5">Domain</label>
@@ -241,8 +251,9 @@ export default function ExpertDetailPage() {
                   type="text"
                   value={editForm.domain}
                   onChange={(e) => setEditForm((f) => ({ ...f, domain: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+                  className={`w-full px-3 py-2 rounded-lg bg-background border text-text-primary focus:outline-none focus:border-primary ${fieldErrors.domain ? 'border-destructive' : 'border-border'}`}
                 />
+                {fieldErrors.domain && <p className="text-xs text-destructive mt-1">{fieldErrors.domain}</p>}
               </div>
               <div>
                 <label className="block text-sm text-text-secondary mb-1.5">Description</label>

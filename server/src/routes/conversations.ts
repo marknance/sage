@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { db } from '../index.js';
 import { authenticate } from '../middleware/auth.js';
 import { chatCompletion, chatCompletionStream, buildSystemPrompt, resolveBackendConfig } from '../services/ollama.js';
+import { isWithinLength } from '../lib/validate.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -69,6 +70,11 @@ router.get('/', (req, res) => {
 router.post('/', (req, res) => {
   const userId = req.user!.id;
   const { title, type } = req.body;
+
+  if (title && !isWithinLength(title, 1, 200)) {
+    res.status(400).json({ error: 'Title must be 1-200 characters' });
+    return;
+  }
 
   const result = db.prepare(`
     INSERT INTO conversations (user_id, title, type)

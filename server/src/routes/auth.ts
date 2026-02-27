@@ -2,6 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcrypt';
 import { db } from '../index.js';
 import { signToken, COOKIE_OPTIONS, authenticate } from '../middleware/auth.js';
+import { isValidEmail, isWithinLength } from '../lib/validate.js';
 
 const router = Router();
 
@@ -11,6 +12,16 @@ router.post('/register', async (req, res) => {
 
   if (!username || !email || !password) {
     res.status(400).json({ error: 'Username, email, and password are required' });
+    return;
+  }
+
+  if (!isWithinLength(username, 2, 50)) {
+    res.status(400).json({ error: 'Username must be 2-50 characters' });
+    return;
+  }
+
+  if (!isValidEmail(email)) {
+    res.status(400).json({ error: 'Invalid email format' });
     return;
   }
 

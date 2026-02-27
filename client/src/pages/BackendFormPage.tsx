@@ -25,6 +25,7 @@ export default function BackendFormPage() {
   const [org_id, setOrgId] = useState('');
   const [is_active, setIsActive] = useState(true);
   const [error, setError] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
 
@@ -66,13 +67,25 @@ export default function BackendFormPage() {
     }
   }
 
+  function validate(): boolean {
+    const errs: Record<string, string> = {};
+    if (!name.trim() || name.trim().length > 100) errs.name = 'Name is required (1-100 characters)';
+    if (base_url.trim()) {
+      try {
+        const u = new URL(base_url.trim());
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') errs.base_url = 'URL must start with http:// or https://';
+      } catch {
+        errs.base_url = 'Invalid URL format';
+      }
+    }
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
-    if (!name.trim()) {
-      setError('Name is required');
-      return;
-    }
+    if (!validate()) return;
 
     setLoading(true);
     try {
@@ -136,8 +149,9 @@ export default function BackendFormPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g., Local Ollama"
-                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+                  className={`w-full px-3 py-2 rounded-lg bg-background border text-text-primary focus:outline-none focus:border-primary ${errors.name ? 'border-destructive' : 'border-border'}`}
                 />
+                {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
               </div>
               <div>
                 <label className="block text-sm text-text-secondary mb-1">Type</label>
@@ -160,8 +174,9 @@ export default function BackendFormPage() {
                   value={base_url}
                   onChange={(e) => setBaseUrl(e.target.value)}
                   placeholder="https://api.example.com"
-                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+                  className={`w-full px-3 py-2 rounded-lg bg-background border text-text-primary focus:outline-none focus:border-primary ${errors.base_url ? 'border-destructive' : 'border-border'}`}
                 />
+                {errors.base_url && <p className="text-xs text-destructive mt-1">{errors.base_url}</p>}
               </div>
             </div>
           </div>

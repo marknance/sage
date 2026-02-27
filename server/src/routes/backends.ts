@@ -2,6 +2,7 @@ import { Router } from 'express';
 import axios from 'axios';
 import { db } from '../index.js';
 import { authenticate } from '../middleware/auth.js';
+import { isValidUrl, isWithinLength } from '../lib/validate.js';
 
 const router = Router();
 router.use(authenticate);
@@ -35,8 +36,16 @@ router.post('/', (req, res) => {
     res.status(400).json({ error: 'name and type are required' });
     return;
   }
+  if (!isWithinLength(name, 1, 100)) {
+    res.status(400).json({ error: 'Name must be 1-100 characters' });
+    return;
+  }
 
   const resolvedUrl = base_url || TYPE_DEFAULTS[type] || '';
+  if (resolvedUrl && !isValidUrl(resolvedUrl)) {
+    res.status(400).json({ error: 'Invalid base URL format' });
+    return;
+  }
 
   const result = db.prepare(`
     INSERT INTO ai_backends (user_id, name, type, base_url, api_key, org_id, is_active)
@@ -72,6 +81,15 @@ router.put('/:id', (req, res) => {
   }
 
   const { name, type, base_url, api_key, org_id, is_active } = req.body;
+
+  if (name !== undefined && !isWithinLength(name, 1, 100)) {
+    res.status(400).json({ error: 'Name must be 1-100 characters' });
+    return;
+  }
+  if (base_url && !isValidUrl(base_url)) {
+    res.status(400).json({ error: 'Invalid base URL format' });
+    return;
+  }
 
   // api_key logic: omitted = keep, empty string = clear, value = update
   let resolvedApiKey = existing.api_key;

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../index.js';
 import { authenticate } from '../middleware/auth.js';
+import { isWithinLength } from '../lib/validate.js';
 
 const router = Router();
 router.use(authenticate);
@@ -61,6 +62,22 @@ router.post('/', (req, res) => {
     res.status(400).json({ error: 'Name and domain are required' });
     return;
   }
+  if (!isWithinLength(name, 1, 100)) {
+    res.status(400).json({ error: 'Name must be 1-100 characters' });
+    return;
+  }
+  if (!isWithinLength(domain, 1, 200)) {
+    res.status(400).json({ error: 'Domain must be 1-200 characters' });
+    return;
+  }
+  if (description && !isWithinLength(description, 0, 1000)) {
+    res.status(400).json({ error: 'Description must be under 1000 characters' });
+    return;
+  }
+  if (system_prompt && !isWithinLength(system_prompt, 0, 10000)) {
+    res.status(400).json({ error: 'System prompt must be under 10000 characters' });
+    return;
+  }
 
   const result = db.prepare(`
     INSERT INTO experts (user_id, name, domain, description, personality_tone, system_prompt, backend_id, model_override, memory_enabled)
@@ -107,6 +124,23 @@ router.put('/:id', (req, res) => {
   }
 
   const { name, domain, description, personality_tone, system_prompt, backend_id, model_override, memory_enabled } = req.body;
+
+  if (name !== undefined && !isWithinLength(name, 1, 100)) {
+    res.status(400).json({ error: 'Name must be 1-100 characters' });
+    return;
+  }
+  if (domain !== undefined && !isWithinLength(domain, 1, 200)) {
+    res.status(400).json({ error: 'Domain must be 1-200 characters' });
+    return;
+  }
+  if (description && !isWithinLength(description, 0, 1000)) {
+    res.status(400).json({ error: 'Description must be under 1000 characters' });
+    return;
+  }
+  if (system_prompt && !isWithinLength(system_prompt, 0, 10000)) {
+    res.status(400).json({ error: 'System prompt must be under 10000 characters' });
+    return;
+  }
 
   db.prepare(`
     UPDATE experts SET
