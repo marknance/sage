@@ -130,6 +130,62 @@ router.get('/:id', (req, res) => {
   res.json({ conversation, experts, messages, documents, hasMore });
 });
 
+// GET /:id/export — export conversation
+router.get('/:id/export', (req, res) => {
+  const conversation = db.prepare('SELECT * FROM conversations WHERE id = ? AND user_id = ?')
+    .get(req.params.id, req.user!.id) as any;
+  if (!conversation) {
+    res.status(404).json({ error: 'Conversation not found' });
+    return;
+  }
+
+  const messages = db.prepare(`
+    SELECT m.*, e.name as expert_name
+    FROM messages m
+    LEFT JOIN experts e ON e.id = m.expert_id
+    WHERE m.conversation_id = ?
+    ORDER BY m.created_at ASC
+  `).all(req.params.id) as any[];
+
+  const documents = db.prepare('SELECT id, filename, file_type, file_size, created_at FROM documents WHERE conversation_id = ?')
+    .all(req.params.id);
+
+  const experts = db.prepare(`
+    SELECT e.name, e.domain
+    FROM conversation_experts ce
+    JOIN experts e ON e.id = ce.expert_id
+    WHERE ce.conversation_id = ?
+  `).all(req.params.id);
+
+  const format = req.query.format;
+
+  if (format === 'md') {
+    let md = `# ${conversation.title}\n\n`;
+    md += `**Type:** ${conversation.type} | **Created:** ${conversation.created_at}\n\n`;
+    if ((experts as any[]).length > 0) {
+      md += `**Experts:** ${(experts as any[]).map((e: any) => e.name).join(', ')}\n\n`;
+    }
+    md += `---\n\n`;
+    for (const msg of messages) {
+      const speaker = msg.role === 'user' ? 'You' : (msg.expert_name || 'Assistant');
+      const time = new Date(msg.created_at).toLocaleString();
+      md += `### ${speaker} — ${time}\n\n${msg.content}\n\n`;
+    }
+    res.setHeader('Content-Type', 'text/markdown');
+    res.setHeader('Content-Disposition', `attachment; filename="${conversation.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.md"`);
+    res.send(md);
+  } else {
+    res.json({
+      title: conversation.title,
+      type: conversation.type,
+      created_at: conversation.created_at,
+      messages,
+      documents,
+      experts,
+    });
+  }
+});
+
 // PUT /:id — update conversation
 router.put('/:id', (req, res) => {
   const existing = db.prepare('SELECT id FROM conversations WHERE id = ? AND user_id = ?')

@@ -257,6 +257,29 @@ export default function ConversationPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <select
+            defaultValue=""
+            onChange={(e) => {
+              const fmt = e.target.value;
+              if (!fmt) return;
+              e.target.value = '';
+              const url = `/api/conversations/${convId}/export${fmt === 'md' ? '?format=md' : ''}`;
+              fetch(url, { credentials: 'include' })
+                .then((r) => r.blob())
+                .then((blob) => {
+                  const a = document.createElement('a');
+                  a.href = URL.createObjectURL(blob);
+                  a.download = `${currentConversation!.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.${fmt === 'md' ? 'md' : 'json'}`;
+                  a.click();
+                  URL.revokeObjectURL(a.href);
+                });
+            }}
+            className="px-3 py-1.5 rounded-lg border border-border text-text-secondary text-sm bg-surface focus:outline-none"
+          >
+            <option value="">Export...</option>
+            <option value="json">JSON</option>
+            <option value="md">Markdown</option>
+          </select>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="px-3 py-1.5 rounded-lg border border-border text-text-secondary hover:text-text-primary text-sm transition-colors"
