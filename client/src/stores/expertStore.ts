@@ -68,6 +68,7 @@ interface ExpertState {
   createCategory: (name: string) => Promise<Category>;
   renameCategory: (id: number, name: string) => Promise<void>;
   deleteCategory: (id: number) => Promise<void>;
+  cloneExpert: (id: number) => Promise<Expert>;
   exportExpert: (id: number) => Promise<void>;
   importExpert: (data: any, strategy: 'skip' | 'rename' | 'overwrite') => Promise<Expert>;
 }
@@ -201,6 +202,14 @@ export const useExpertStore = create<ExpertState>((set, get) => ({
   deleteCategory: async (id) => {
     await api(`/api/categories/${id}`, { method: 'DELETE' });
     set((s) => ({ allCategories: s.allCategories.filter((c) => c.id !== id) }));
+  },
+
+  cloneExpert: async (id) => {
+    const { expert } = await api<{ expert: Expert }>(`/api/experts/${id}/clone`, {
+      method: 'POST',
+    });
+    toast.success(`Expert cloned as "${expert.name}"`);
+    return expert;
   },
 
   exportExpert: async (id) => {

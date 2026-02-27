@@ -38,6 +38,7 @@ export default function ExpertDetailPage() {
     fetchAllCategories,
     checkExpertUsage,
     exportExpert,
+    cloneExpert,
   } = useExpertStore();
   const { backends, fetchBackends, models, fetchModels } = useBackendStore();
 
@@ -190,6 +191,15 @@ export default function ExpertDetailPage() {
                 </>
               ) : (
                 <>
+                  <button
+                    onClick={async () => {
+                      const cloned = await cloneExpert(expertId);
+                      navigate(`/experts/${cloned.id}`);
+                    }}
+                    className="px-3 py-1 rounded-lg border border-border text-text-secondary text-sm hover:text-text-primary transition-colors"
+                  >
+                    Clone
+                  </button>
                   <button
                     onClick={() => exportExpert(expertId)}
                     className="px-3 py-1 rounded-lg border border-border text-text-secondary text-sm hover:text-text-primary transition-colors"

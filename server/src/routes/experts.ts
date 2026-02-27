@@ -160,6 +160,47 @@ router.put('/:id', (req, res) => {
   res.json({ expert });
 });
 
+// POST /:id/clone — duplicate an expert
+router.post('/:id/clone', (req, res) => {
+  const expert = db.prepare('SELECT * FROM experts WHERE id = ? AND user_id = ?')
+    .get(req.params.id, req.user!.id) as any;
+  if (!expert) {
+    res.status(404).json({ error: 'Expert not found' });
+    return;
+  }
+
+  const tx = db.transaction(() => {
+    const result = db.prepare(`
+      INSERT INTO experts (user_id, name, domain, description, personality_tone, system_prompt, backend_id, model_override, memory_enabled)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      req.user!.id, `${expert.name} (copy)`, expert.domain, expert.description,
+      expert.personality_tone, expert.system_prompt, expert.backend_id, expert.model_override, expert.memory_enabled
+    );
+    const newId = result.lastInsertRowid;
+
+    // Clone behaviors
+    const behaviors = db.prepare('SELECT behavior_key, enabled FROM expert_behaviors WHERE expert_id = ?').all(req.params.id) as any[];
+    const insertBehavior = db.prepare('INSERT INTO expert_behaviors (expert_id, behavior_key, enabled) VALUES (?, ?, ?)');
+    for (const b of behaviors) {
+      insertBehavior.run(newId, b.behavior_key, b.enabled);
+    }
+
+    // Clone category assignments
+    const cats = db.prepare('SELECT category_id FROM expert_category_map WHERE expert_id = ?').all(req.params.id) as any[];
+    const insertCat = db.prepare('INSERT INTO expert_category_map (expert_id, category_id) VALUES (?, ?)');
+    for (const c of cats) {
+      insertCat.run(newId, c.category_id);
+    }
+
+    return newId;
+  });
+
+  const newId = tx();
+  const cloned = db.prepare('SELECT * FROM experts WHERE id = ?').get(newId);
+  res.status(201).json({ expert: cloned });
+});
+
 // GET /:id/usage — check expert usage across conversations
 router.get('/:id/usage', (req, res) => {
   const existing = db.prepare('SELECT id FROM experts WHERE id = ? AND user_id = ?').get(req.params.id, req.user!.id);
