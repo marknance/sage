@@ -62,7 +62,7 @@ router.get('/:id', (req, res) => {
   }
 
   const experts = db.prepare(`
-    SELECT e.*, ce.id as assignment_id
+    SELECT e.*, ce.id as assignment_id, ce.backend_override_id, ce.model_override as conv_model_override
     FROM conversation_experts ce
     JOIN experts e ON e.id = ce.expert_id
     WHERE ce.conversation_id = ?
@@ -158,7 +158,7 @@ router.post('/:id/experts', (req, res) => {
     .run(req.params.id, expert_id);
 
   const experts = db.prepare(`
-    SELECT e.*, ce.id as assignment_id
+    SELECT e.*, ce.id as assignment_id, ce.backend_override_id, ce.model_override as conv_model_override
     FROM conversation_experts ce
     JOIN experts e ON e.id = ce.expert_id
     WHERE ce.conversation_id = ?
@@ -184,7 +184,46 @@ router.delete('/:id/experts/:expertId', (req, res) => {
   }
 
   const experts = db.prepare(`
-    SELECT e.*, ce.id as assignment_id
+    SELECT e.*, ce.id as assignment_id, ce.backend_override_id, ce.model_override as conv_model_override
+    FROM conversation_experts ce
+    JOIN experts e ON e.id = ce.expert_id
+    WHERE ce.conversation_id = ?
+  `).all(req.params.id);
+
+  res.json({ experts });
+});
+
+// PUT /:id/experts/:expertId — update conversation-expert overrides
+router.put('/:id/experts/:expertId', (req, res) => {
+  const conversation = db.prepare('SELECT id FROM conversations WHERE id = ? AND user_id = ?')
+    .get(req.params.id, req.user!.id);
+  if (!conversation) {
+    res.status(404).json({ error: 'Conversation not found' });
+    return;
+  }
+
+  const existing = db.prepare('SELECT id FROM conversation_experts WHERE conversation_id = ? AND expert_id = ?')
+    .get(req.params.id, req.params.expertId) as any;
+  if (!existing) {
+    res.status(404).json({ error: 'Expert not assigned' });
+    return;
+  }
+
+  const { backend_override_id, model_override } = req.body;
+
+  db.prepare(`
+    UPDATE conversation_experts SET
+      backend_override_id = ?,
+      model_override = ?
+    WHERE id = ?
+  `).run(
+    backend_override_id !== undefined ? (backend_override_id || null) : null,
+    model_override !== undefined ? (model_override || null) : null,
+    existing.id
+  );
+
+  const experts = db.prepare(`
+    SELECT e.*, ce.id as assignment_id, ce.backend_override_id, ce.model_override as conv_model_override
     FROM conversation_experts ce
     JOIN experts e ON e.id = ce.expert_id
     WHERE ce.conversation_id = ?
@@ -233,9 +272,10 @@ router.post('/:id/messages', async (req, res) => {
     db.prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)')
       .run(req.params.id, 'user', content);
 
-    // Get assigned experts
+    // Get assigned experts with conversation-level overrides
     const assignedExperts = db.prepare(`
-      SELECT e.* FROM conversation_experts ce
+      SELECT e.*, ce.backend_override_id, ce.model_override as conv_model_override
+      FROM conversation_experts ce
       JOIN experts e ON e.id = ce.expert_id
       WHERE ce.conversation_id = ?
     `).all(req.params.id) as any[];
@@ -341,12 +381,16 @@ async function getExpertResponse(
     ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
   ];
 
-  // Resolve backend: expert → user default → env fallback
+  // Resolve backend: conversation override → expert → user default → env fallback
   const userSettings = db.prepare('SELECT default_backend_id FROM settings WHERE user_id = ?')
     .get(userId) as { default_backend_id: number | null } | undefined;
-  const backend = resolveBackendConfig(expert.backend_id, userSettings?.default_backend_id, db);
+  const backendId = expert.backend_override_id || expert.backend_id;
+  const backend = resolveBackendConfig(backendId, userSettings?.default_backend_id, db);
 
-  return chatCompletion({ messages, model: expert.model_override || undefined, backend });
+  // Model priority: conversation override → expert setting → default
+  const model = expert.conv_model_override || expert.model_override || undefined;
+
+  return chatCompletion({ messages, model, backend });
 }
 
 function findSuggestedExperts(userId: number, messageContent: string, excludeExperts: any[]): any[] {

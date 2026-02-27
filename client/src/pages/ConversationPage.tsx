@@ -4,6 +4,7 @@ import { marked } from 'marked';
 import { useDropzone } from 'react-dropzone';
 import { useConversationStore } from '../stores/conversationStore';
 import { useExpertStore, type Expert } from '../stores/expertStore';
+import { useBackendStore } from '../stores/backendStore';
 
 export default function ConversationPage() {
   const { id } = useParams<{ id: string }>();
@@ -24,11 +25,13 @@ export default function ConversationPage() {
     sendMessage,
     assignExpert,
     removeExpert,
+    updateExpertOverride,
     uploadDocument,
     deleteDocument,
   } = useConversationStore();
 
   const { experts: allExperts, fetchExperts } = useExpertStore();
+  const { backends, fetchBackends } = useBackendStore();
 
   const [input, setInput] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -39,7 +42,8 @@ export default function ConversationPage() {
   useEffect(() => {
     fetchConversation(convId);
     fetchExperts();
-  }, [convId, fetchConversation, fetchExperts]);
+    fetchBackends();
+  }, [convId, fetchConversation, fetchExperts, fetchBackends]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -262,17 +266,31 @@ export default function ConversationPage() {
               ) : (
                 <div className="space-y-2 mb-3">
                   {assignedExperts.map((expert) => (
-                    <div key={expert.id} className="flex items-center justify-between bg-background rounded-lg px-3 py-2">
-                      <div>
-                        <p className="text-sm text-text-primary font-medium">{expert.name}</p>
-                        <p className="text-xs text-text-muted">{expert.domain}</p>
+                    <div key={expert.id} className="bg-background rounded-lg px-3 py-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <div>
+                          <p className="text-sm text-text-primary font-medium">{expert.name}</p>
+                          <p className="text-xs text-text-muted">{expert.domain}</p>
+                        </div>
+                        <button
+                          onClick={() => removeExpert(convId, expert.id)}
+                          className="text-text-muted hover:text-red-400 text-xs transition-colors"
+                        >
+                          Remove
+                        </button>
                       </div>
-                      <button
-                        onClick={() => removeExpert(convId, expert.id)}
-                        className="text-text-muted hover:text-red-400 text-xs transition-colors"
+                      <select
+                        value={expert.backend_override_id ?? ''}
+                        onChange={(e) => updateExpertOverride(convId, expert.id, {
+                          backend_override_id: e.target.value ? Number(e.target.value) : null,
+                        })}
+                        className="w-full mt-1 px-2 py-1 rounded bg-surface border border-border text-text-secondary text-xs focus:outline-none focus:border-primary"
                       >
-                        Remove
-                      </button>
+                        <option value="">Backend: default</option>
+                        {backends.filter((b) => b.is_active).map((b) => (
+                          <option key={b.id} value={b.id}>{b.name} ({b.type})</option>
+                        ))}
+                      </select>
                     </div>
                   ))}
                 </div>

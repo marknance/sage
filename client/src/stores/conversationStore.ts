@@ -39,7 +39,7 @@ interface ConversationState {
   conversations: Conversation[];
   currentConversation: Conversation | null;
   messages: Message[];
-  experts: (Expert & { assignment_id: number })[];
+  experts: (Expert & { assignment_id: number; backend_override_id?: number | null; conv_model_override?: string | null })[];
   documents: Document[];
   suggestedExperts: Expert[];
   isLoading: boolean;
@@ -53,6 +53,7 @@ interface ConversationState {
   sendMessage: (id: number, content: string) => Promise<void>;
   assignExpert: (conversationId: number, expertId: number) => Promise<void>;
   removeExpert: (conversationId: number, expertId: number) => Promise<void>;
+  updateExpertOverride: (conversationId: number, expertId: number, data: { backend_override_id?: number | null; model_override?: string | null }) => Promise<void>;
   uploadDocument: (conversationId: number, file: File) => Promise<void>;
   deleteDocument: (conversationId: number, docId: number) => Promise<void>;
 }
@@ -82,7 +83,7 @@ export const useConversationStore = create<ConversationState>((set) => ({
     try {
       const data = await api<{
         conversation: Conversation;
-        experts: (Expert & { assignment_id: number })[];
+        experts: (Expert & { assignment_id: number; backend_override_id?: number | null; conv_model_override?: string | null })[];
         messages: Message[];
         documents: Document[];
       }>(`/api/conversations/${id}`);
@@ -161,8 +162,16 @@ export const useConversationStore = create<ConversationState>((set) => ({
     }
   },
 
+  updateExpertOverride: async (conversationId, expertId, data) => {
+    const { experts } = await api<{ experts: (Expert & { assignment_id: number; backend_override_id?: number | null; conv_model_override?: string | null })[] }>(
+      `/api/conversations/${conversationId}/experts/${expertId}`,
+      { method: 'PUT', body: JSON.stringify(data) }
+    );
+    set({ experts });
+  },
+
   assignExpert: async (conversationId, expertId) => {
-    const { experts } = await api<{ experts: (Expert & { assignment_id: number })[] }>(
+    const { experts } = await api<{ experts: (Expert & { assignment_id: number; backend_override_id?: number | null; conv_model_override?: string | null })[] }>(
       `/api/conversations/${conversationId}/experts`,
       { method: 'POST', body: JSON.stringify({ expert_id: expertId }) }
     );
@@ -170,7 +179,7 @@ export const useConversationStore = create<ConversationState>((set) => ({
   },
 
   removeExpert: async (conversationId, expertId) => {
-    const { experts } = await api<{ experts: (Expert & { assignment_id: number })[] }>(
+    const { experts } = await api<{ experts: (Expert & { assignment_id: number; backend_override_id?: number | null; conv_model_override?: string | null })[] }>(
       `/api/conversations/${conversationId}/experts/${expertId}`,
       { method: 'DELETE' }
     );
