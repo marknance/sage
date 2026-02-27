@@ -98,6 +98,61 @@ router.get('/me', authenticate, (req, res) => {
   res.json({ user: req.user });
 });
 
+// PUT /profile — update username/email
+router.put('/profile', authenticate, async (req, res) => {
+  const { username, email } = req.body;
+
+  if (username !== undefined) {
+    if (!isWithinLength(username, 2, 50)) {
+      res.status(400).json({ error: 'Username must be 2-50 characters' });
+      return;
+    }
+  }
+
+  if (email !== undefined) {
+    if (!isValidEmail(email)) {
+      res.status(400).json({ error: 'Invalid email format' });
+      return;
+    }
+    const existing = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email, req.user!.id);
+    if (existing) {
+      res.status(409).json({ error: 'Email already in use' });
+      return;
+    }
+  }
+
+  db.prepare(`
+    UPDATE users SET
+      username = COALESCE(?, username),
+      email = COALESCE(?, email),
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(username ?? null, email ?? null, req.user!.id);
+
+  const user = db.prepare('SELECT id, username, email, role, created_at FROM users WHERE id = ?').get(req.user!.id);
+  res.json({ user });
+});
+
+// DELETE /account — delete own account
+router.delete('/account', authenticate, async (req, res) => {
+  const { password } = req.body;
+  if (!password) {
+    res.status(400).json({ error: 'Password is required to delete account' });
+    return;
+  }
+
+  const user = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user!.id) as { password_hash: string };
+  const valid = await bcrypt.compare(password, user.password_hash);
+  if (!valid) {
+    res.status(401).json({ error: 'Password is incorrect' });
+    return;
+  }
+
+  db.prepare('DELETE FROM users WHERE id = ?').run(req.user!.id);
+  res.clearCookie('token', COOKIE_OPTIONS);
+  res.json({ message: 'Account deleted' });
+});
+
 // PUT /password
 router.put('/password', authenticate, async (req, res) => {
   const { currentPassword, newPassword } = req.body;

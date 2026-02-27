@@ -5,9 +5,19 @@ import { useBackendStore } from '../stores/backendStore';
 import { api } from '../lib/api';
 
 export default function ProfilePage() {
-  const { user, logout, changePassword } = useAuthStore();
+  const { user, logout, changePassword, updateProfile, deleteAccount } = useAuthStore();
   const { backends, fetchBackends } = useBackendStore();
   const navigate = useNavigate();
+
+  const [username, setUsername] = useState(user?.username || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profileSuccess, setProfileSuccess] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const [defaultBackendId, setDefaultBackendId] = useState<string>('');
   const [defaultModel, setDefaultModel] = useState<string>('');
@@ -102,24 +112,63 @@ export default function ProfilePage() {
         {/* User Info */}
         <div className="bg-surface rounded-xl border border-border p-6">
           <h1 className="text-2xl font-semibold text-text-primary mb-4">Profile</h1>
-          <dl className="space-y-3">
+
+          {profileError && (
+            <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{profileError}</div>
+          )}
+          {profileSuccess && (
+            <div className="mb-4 p-3 rounded-lg bg-success/10 text-success text-sm">{profileSuccess}</div>
+          )}
+
+          <div className="space-y-3">
             <div>
-              <dt className="text-sm text-text-muted">Username</dt>
-              <dd className="text-text-primary">{user?.username}</dd>
+              <label className="block text-sm text-text-muted mb-1">Username</label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+              />
             </div>
             <div>
-              <dt className="text-sm text-text-muted">Email</dt>
-              <dd className="text-text-primary">{user?.email}</dd>
+              <label className="block text-sm text-text-muted mb-1">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+              />
             </div>
             <div>
-              <dt className="text-sm text-text-muted">Role</dt>
-              <dd className="text-text-primary capitalize">{user?.role}</dd>
+              <label className="block text-sm text-text-muted mb-1">Role</label>
+              <p className="text-text-primary capitalize">{user?.role}</p>
             </div>
-          </dl>
+          </div>
+
+          <button
+            onClick={async () => {
+              setProfileError('');
+              setProfileSuccess('');
+              setProfileSaving(true);
+              try {
+                await updateProfile(username, email);
+                setProfileSuccess('Profile updated');
+                setTimeout(() => setProfileSuccess(''), 2000);
+              } catch (err: any) {
+                setProfileError(err.message || 'Failed to update profile');
+              } finally {
+                setProfileSaving(false);
+              }
+            }}
+            disabled={profileSaving}
+            className="mt-4 w-full py-2 rounded-lg bg-primary text-white font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+          >
+            {profileSaving ? 'Saving...' : 'Save Profile'}
+          </button>
 
           <button
             onClick={handleLogout}
-            className="mt-6 w-full py-2 rounded-lg border border-destructive text-destructive font-medium hover:bg-destructive/10 transition-colors"
+            className="mt-3 w-full py-2 rounded-lg border border-destructive text-destructive font-medium hover:bg-destructive/10 transition-colors"
           >
             Sign Out
           </button>
@@ -249,7 +298,65 @@ export default function ProfilePage() {
             </button>
           </form>
         </div>
+
+        {/* Delete Account */}
+        <div className="bg-surface rounded-xl border border-destructive/30 p-6">
+          <h2 className="text-lg font-semibold text-destructive mb-2">Delete Account</h2>
+          <p className="text-sm text-text-muted mb-4">Permanently delete your account and all associated data. This cannot be undone.</p>
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="px-4 py-2 rounded-lg border border-destructive text-destructive font-medium hover:bg-destructive/10 transition-colors"
+          >
+            Delete My Account
+          </button>
+        </div>
       </div>
+
+      {/* Delete Account Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-surface border border-border rounded-xl p-6 max-w-sm mx-4">
+            <h3 className="text-lg font-medium text-text-primary mb-2">Confirm Account Deletion</h3>
+            <p className="text-sm text-text-secondary mb-4">Enter your password to permanently delete your account.</p>
+            {deleteError && (
+              <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{deleteError}</div>
+            )}
+            <input
+              type="password"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              placeholder="Your password"
+              className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary mb-4"
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => { setShowDeleteModal(false); setDeletePassword(''); setDeleteError(''); }}
+                className="px-4 py-2 rounded-lg border border-border text-text-secondary text-sm hover:text-text-primary transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={deleteLoading || !deletePassword}
+                onClick={async () => {
+                  setDeleteError('');
+                  setDeleteLoading(true);
+                  try {
+                    await deleteAccount(deletePassword);
+                    navigate('/login');
+                  } catch (err: any) {
+                    setDeleteError(err.message || 'Failed to delete account');
+                  } finally {
+                    setDeleteLoading(false);
+                  }
+                }}
+                className="px-4 py-2 rounded-lg bg-destructive text-white text-sm disabled:opacity-50"
+              >
+                {deleteLoading ? 'Deleting...' : 'Delete Account'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

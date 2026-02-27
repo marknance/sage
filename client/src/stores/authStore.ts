@@ -18,6 +18,8 @@ interface AuthState {
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  updateProfile: (username: string, email: string) => Promise<void>;
+  deleteAccount: (password: string) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -60,5 +62,21 @@ export const useAuthStore = create<AuthState>((set) => ({
       method: 'PUT',
       body: JSON.stringify({ currentPassword, newPassword }),
     });
+  },
+
+  updateProfile: async (username, email) => {
+    const { user } = await api<{ user: User }>('/api/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify({ username, email }),
+    });
+    set({ user });
+  },
+
+  deleteAccount: async (password) => {
+    await api('/api/auth/account', {
+      method: 'DELETE',
+      body: JSON.stringify({ password }),
+    });
+    set({ user: null, isAuthenticated: false });
   },
 }));
