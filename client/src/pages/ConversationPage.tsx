@@ -7,6 +7,7 @@ import { useConversationStore, type Message } from '../stores/conversationStore'
 import { useExpertStore, type Expert } from '../stores/expertStore';
 import { useBackendStore } from '../stores/backendStore';
 import { useThemeStore } from '../stores/themeStore';
+import { toast } from '../stores/toastStore';
 import hljs from 'highlight.js/lib/core';
 import javascript from 'highlight.js/lib/languages/javascript';
 import typescript from 'highlight.js/lib/languages/typescript';
@@ -309,8 +310,17 @@ export default function ConversationPage() {
   };
 
   const onDrop = useCallback(async (files: File[]) => {
+    const maxSize = 10 * 1024 * 1024; // 10MB
     for (const file of files) {
-      await uploadDocument(convId, file);
+      if (file.size > maxSize) {
+        toast.error(`"${file.name}" exceeds 10MB limit`);
+        continue;
+      }
+      try {
+        await uploadDocument(convId, file);
+      } catch (err: any) {
+        toast.error(err.message || `Failed to upload "${file.name}"`);
+      }
     }
   }, [convId, uploadDocument]);
 
