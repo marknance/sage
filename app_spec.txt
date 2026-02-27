@@ -1,0 +1,638 @@
+<project_specification>
+  <project_name>Sage</project_name>
+
+  <overview>
+    Sage is a personal AI expert studio that lets users create, manage, and consult specialized
+    AI agents called "Experts." Each Expert is configured with a domain, personality, behaviors,
+    and memory, and can be powered by any supported AI backend (Ollama, LMStudio, OpenAI,
+    Anthropic, and others). Users consult Experts through a rich chat interface supporting
+    document uploads, multi-expert panels, and head-to-head "Crossfire" conversations where
+    different Experts use different AI models to compare perspectives on the same question.
+  </overview>
+
+  <technology_stack>
+    <frontend>
+      <framework>React 19 with TypeScript</framework>
+      <styling>Tailwind CSS v4</styling>
+      <routing>React Router v7</routing>
+      <state>TanStack Query v5 for server state, Zustand for UI state</state>
+      <build>Vite 7</build>
+      <extras>Marked (markdown rendering), React Dropzone (file upload)</extras>
+      <port>5173 (dev), served from Express in production</port>
+    </frontend>
+    <backend>
+      <runtime>Node.js 20+ with Express 5</runtime>
+      <language>TypeScript</language>
+      <database>SQLite via better-sqlite3</database>
+      <auth>JWT (jsonwebtoken) with bcrypt password hashing, stored in HttpOnly cookie</auth>
+      <file_handling>Multer for uploads, stored in ./uploads directory</file_handling>
+      <ai_integration>Axios for calling AI backend APIs (Ollama, LMStudio, OpenAI, Anthropic)</ai_integration>
+      <port>3001</port>
+    </backend>
+    <communication>
+      <api>REST JSON API under /api prefix</api>
+      <realtime>Server-Sent Events (SSE) for streaming AI responses</realtime>
+    </communication>
+  </technology_stack>
+
+  <prerequisites>
+    <environment_setup>
+      - Node.js 20+ installed
+      - npm 10+ installed
+      - SQLite3 available (bundled via better-sqlite3)
+      - Optional: Ollama running at localhost:11434
+      - Optional: LMStudio running at localhost:1234
+      - Optional: OpenAI API key or Anthropic API key in .env
+      - Ports: Backend on 3001, Frontend dev server on 5173
+    </environment_setup>
+  </prerequisites>
+
+  <feature_count>105</feature_count>
+
+  <security_and_access_control>
+    <user_roles>
+      <role name="admin">
+        <permissions>
+          - Full access to all app features
+          - Access to /admin panel
+          - Create, edit, and delete any user
+          - Assign roles to users
+          - View all users list
+        </permissions>
+        <protected_routes>
+          - /admin/* (admin only, returns 403 for non-admin)
+        </protected_routes>
+      </role>
+      <role name="user">
+        <permissions>
+          - Manage own Experts (create, edit, delete, export, import)
+          - Manage own conversations and documents
+          - Configure own AI backend preferences
+          - Change own profile and password
+          - Cannot access /admin routes
+        </permissions>
+        <protected_routes>
+          - All /app/* routes require authentication, redirect to /login if not authenticated
+        </protected_routes>
+      </role>
+    </user_roles>
+    <authentication>
+      <method>Email and password with JWT tokens stored in HttpOnly cookies</method>
+      <session_timeout>7 days (sliding window, refreshed on activity)</session_timeout>
+      <password_requirements>Minimum 8 characters</password_requirements>
+    </authentication>
+    <sensitive_operations>
+      - Delete account requires password confirmation
+      - Admin role changes logged server-side
+    </sensitive_operations>
+  </security_and_access_control>
+
+  <core_features>
+
+    <infrastructure>
+      - Database connection established and verified via health endpoint
+      - Database schema applied correctly (all tables present with correct columns)
+      - Data persists across server restart (verified with RESTART_TEST pattern)
+      - No mock data patterns in codebase (grep verification)
+      - Backend API queries real SQLite database (SQL queries appear in logs)
+    </infrastructure>
+
+    <authentication_and_accounts>
+      - User registration with email and password
+      - User login returns JWT stored in HttpOnly cookie
+      - User logout clears session
+      - Protected routes redirect unauthenticated users to /login
+      - Authenticated user profile page (view name, email)
+      - Change password from profile page
+      - Invalid login shows clear error message
+      - Session persists across browser refresh
+    </authentication_and_accounts>
+
+    <expert_library_dashboard>
+      - Expert library dashboard showing all user's Experts in grid or list view
+      - Sort Experts alphabetically (A-Z, Z-A)
+      - Sort Experts by category/tag
+      - Sort Experts by recently used (last consulted date)
+      - Search/filter Experts by name or domain in the library
+      - Quick-start chat button on each Expert card (opens new conversation instantly)
+      - Multi-select mode: select multiple Experts to start a panel conversation
+      - Expert card displays name, domain, personality badge, and last-used date
+      - Empty state shown when no Experts exist with call-to-action to create one
+      - Expert count displayed in library header
+    </expert_library_dashboard>
+
+    <expert_management>
+      - Create Expert via interview-style wizard (step-by-step guided form)
+      - Interview wizard collects: name, description, domain/topic, personality/tone, behavior toggles, model override
+      - Edit existing Expert (all fields editable after creation)
+      - Delete Expert with confirmation dialog
+      - View Expert detail page with all configuration displayed
+      - Export Expert as JSON file download
+      - Import Expert from JSON file (validates format before importing)
+      - Assign Expert to one or more categories/tags
+      - Create and manage Expert categories/tags
+      - Expert system prompt preview shown during creation and on detail page
+    </expert_management>
+
+    <expert_configuration>
+      - Expert name and description fields
+      - Expertise domain/topic free-text field (e.g., "Federal Tax Law", "Marine Biology")
+      - Personality/tone selector with options: formal, casual, Socratic, analytical, empathetic, concise
+      - Toggle behaviors: "Always cite sources", "Ask clarifying questions first",
+        "Summarize key points at end", "Use bullet points for lists", "Request feedback after response"
+      - Per-expert AI model override: select a specific backend + model, overrides the global default
+      - Expert-level system prompt textarea (auto-generated from wizard answers, manually editable)
+    </expert_configuration>
+
+    <expert_memory>
+      - Expert memory panel accessible from Expert detail page
+      - Auto-extract key facts from conversations (triggered after conversation ends)
+      - Manual memory entry: user can add a memory note to any Expert
+      - Edit an existing memory entry
+      - Delete a single memory entry
+      - View all memories for an Expert sorted by date
+      - User profile facts remembered per Expert across conversations
+      - Expert applies its memories automatically when formulating responses
+      - Clear all memory for an Expert with confirmation dialog
+    </expert_memory>
+
+    <ai_backend_configuration>
+      - AI Backends settings page listing all configured backends with status badges
+      - Add Ollama backend (base URL field, optional auth token)
+      - Add LMStudio backend (base URL field, optional auth token)
+      - Add OpenAI API backend (API key, optional organization ID)
+      - Add Anthropic API backend (API key field)
+      - Add custom OpenAI-compatible backend (base URL + API key)
+      - Test backend connection button with live status indicator (connected / failed / timeout)
+      - Auto-detect and list available models from local backends (Ollama, LMStudio)
+      - Set global default backend and model used by all Experts unless overridden
+      - Delete or disable a backend
+    </ai_backend_configuration>
+
+    <standard_conversations>
+      - Start new conversation with a specific Expert from library or Expert detail page
+      - Global "Ask Anything" interface: submit a question without pre-selecting an Expert
+      - Auto-routing: app analyzes question topic and selects the most relevant Expert automatically
+      - Manual Expert override: re-route or reassign a conversation to a different Expert mid-session
+      - AI suggestion: toggle to display suggested Experts before sending the first message
+      - Name/label a conversation title (editable inline in the chat header)
+      - Conversations saved and listed in conversation history sidebar
+      - Resume a past conversation (full message history loaded and sent as context)
+      - Search across past conversations by title or message content
+      - Filter conversations by Expert in the history sidebar
+      - Delete a conversation with confirmation
+      - Expert responses rendered with full markdown formatting
+      - Streaming responses delivered in real-time via SSE
+      - Copy any message to clipboard
+      - Each message shows timestamp metadata
+    </standard_conversations>
+
+    <document_handling>
+      - Upload PDF document to a conversation via drag-and-drop or file picker
+      - Upload Word document (.docx) to a conversation
+      - Upload plain text file (.txt, .md) to a conversation
+      - Upload image file (PNG, JPG, GIF, WebP) to a conversation
+      - Upload code file (.js, .ts, .py, .json, .yaml, .html, .css and similar) to a conversation
+      - Uploaded document stored in database and associated with the conversation
+      - Expert performs automatic cursory review of the document upon upload
+      - After cursory review, Expert asks the user what questions they have about the document
+      - User asks specific follow-up questions; Expert responds with document context
+      - Document attachment shown inline in conversation with filename and file type icon
+      - Remove document from conversation
+    </document_handling>
+
+    <multi_expert_conversations>
+      - Select multiple Experts from a picker screen to start a panel conversation
+      - Panel conversation displays each Expert's response in a tabbed or threaded layout
+      - Toggle per conversation: allow Experts to respond to each other (Expert-to-Expert debate mode)
+      - Toggle per conversation: AI-suggested Expert selection based on question topic
+      - @mention a specific Expert in a message to direct a question to them
+      - Multi-expert conversation history saved and resumable
+      - Visual indicator showing which Expert authored each message (name + domain badge)
+    </multi_expert_conversations>
+
+    <crossfire_conversations>
+      - Create a Crossfire conversation (special type for head-to-head model comparison)
+      - Select 2 or more Experts to participate in the Crossfire
+      - Assign a different AI backend and model to each Expert for this conversation
+      - Each Expert responds to the same initial user prompt using their assigned model
+      - Expert-to-Expert response mode available in Crossfire sessions
+      - Side-by-side (2 experts) or stacked grid (3+ experts) response comparison view
+      - Crossfire conversations labeled distinctly in conversation history
+      - Export Crossfire conversation results as formatted text or JSON file
+    </crossfire_conversations>
+
+    <settings_and_ui>
+      - Light/dark mode toggle (app defaults to dark mode)
+      - Theme preference persisted per user in the database
+      - Settings page with tabbed sections: Appearance, AI Backends, Account
+      - Keyboard shortcuts overlay (press ? to open)
+      - Desktop-first responsive layout (functional on tablet)
+      - Navigation sidebar: Expert Library, Conversations, Settings, Admin (admin only)
+      - App loads without console errors
+    </settings_and_ui>
+
+    <admin_panel>
+      - Admin panel accessible only to users with admin role
+      - List all registered users with email, role, and registration date
+      - Create new user account from admin panel
+      - Edit user details (username, email, role)
+      - Delete user account with confirmation
+      - Admin routes return 403 Forbidden for non-admin authenticated users
+    </admin_panel>
+
+  </core_features>
+
+  <database_schema>
+    <tables>
+      <users>
+        - id INTEGER PRIMARY KEY AUTOINCREMENT
+        - username TEXT NOT NULL
+        - email TEXT UNIQUE NOT NULL
+        - password_hash TEXT NOT NULL
+        - role TEXT NOT NULL DEFAULT 'user'  -- 'user' or 'admin'
+        - created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        - updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      </users>
+      <ai_backends>
+        - id INTEGER PRIMARY KEY AUTOINCREMENT
+        - user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
+        - name TEXT NOT NULL
+        - type TEXT NOT NULL  -- 'ollama', 'lmstudio', 'openai', 'anthropic', 'custom'
+        - base_url TEXT
+        - api_key TEXT
+        - org_id TEXT
+        - is_active INTEGER DEFAULT 1
+        - created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      </ai_backends>
+      <experts>
+        - id INTEGER PRIMARY KEY AUTOINCREMENT
+        - user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
+        - name TEXT NOT NULL
+        - description TEXT
+        - domain TEXT NOT NULL
+        - personality_tone TEXT DEFAULT 'formal'
+        - system_prompt TEXT
+        - backend_id INTEGER REFERENCES ai_backends(id)  -- NULL = use global default
+        - model_override TEXT  -- NULL = use backend default
+        - memory_enabled INTEGER DEFAULT 1
+        - last_used_at DATETIME
+        - created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        - updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      </experts>
+      <expert_behaviors>
+        - id INTEGER PRIMARY KEY AUTOINCREMENT
+        - expert_id INTEGER REFERENCES experts(id) ON DELETE CASCADE
+        - behavior_key TEXT NOT NULL  -- 'cite_sources', 'ask_clarifying', 'summarize_end', 'use_bullets', 'request_feedback'
+        - enabled INTEGER DEFAULT 0
+        - UNIQUE(expert_id, behavior_key)
+      </expert_behaviors>
+      <expert_categories>
+        - id INTEGER PRIMARY KEY AUTOINCREMENT
+        - user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
+        - name TEXT NOT NULL
+        - created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      </expert_categories>
+      <expert_category_map>
+        - id INTEGER PRIMARY KEY AUTOINCREMENT
+        - expert_id INTEGER REFERENCES experts(id) ON DELETE CASCADE
+        - category_id INTEGER REFERENCES expert_categories(id) ON DELETE CASCADE
+        - UNIQUE(expert_id, category_id)
+      </expert_category_map>
+      <expert_memories>
+        - id INTEGER PRIMARY KEY AUTOINCREMENT
+        - expert_id INTEGER REFERENCES experts(id) ON DELETE CASCADE
+        - memory_type TEXT NOT NULL  -- 'auto' or 'manual'
+        - content TEXT NOT NULL
+        - source_conversation_id INTEGER REFERENCES conversations(id)
+        - created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        - updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      </expert_memories>
+      <conversations>
+        - id INTEGER PRIMARY KEY AUTOINCREMENT
+        - user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
+        - title TEXT NOT NULL DEFAULT 'New Conversation'
+        - type TEXT NOT NULL DEFAULT 'standard'  -- 'standard', 'multi_expert', 'crossfire'
+        - expert_debate_enabled INTEGER DEFAULT 0
+        - auto_suggest_experts INTEGER DEFAULT 0
+        - created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        - updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      </conversations>
+      <conversation_experts>
+        - id INTEGER PRIMARY KEY AUTOINCREMENT
+        - conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE
+        - expert_id INTEGER REFERENCES experts(id)
+        - backend_override_id INTEGER REFERENCES ai_backends(id)  -- for Crossfire
+        - model_override TEXT  -- for Crossfire
+      </conversation_experts>
+      <messages>
+        - id INTEGER PRIMARY KEY AUTOINCREMENT
+        - conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE
+        - expert_id INTEGER REFERENCES experts(id)  -- NULL for user messages
+        - role TEXT NOT NULL  -- 'user', 'expert', 'system'
+        - content TEXT NOT NULL
+        - created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      </messages>
+      <documents>
+        - id INTEGER PRIMARY KEY AUTOINCREMENT
+        - conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE
+        - filename TEXT NOT NULL
+        - file_type TEXT NOT NULL
+        - file_path TEXT NOT NULL
+        - file_size INTEGER
+        - extracted_text TEXT
+        - created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      </documents>
+      <settings>
+        - id INTEGER PRIMARY KEY AUTOINCREMENT
+        - user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE CASCADE
+        - theme TEXT DEFAULT 'dark'
+        - default_backend_id INTEGER REFERENCES ai_backends(id)
+        - default_model TEXT
+        - updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      </settings>
+    </tables>
+  </database_schema>
+
+  <api_endpoints_summary>
+    <health>
+      - GET /api/health
+    </health>
+    <auth>
+      - POST /api/auth/register
+      - POST /api/auth/login
+      - POST /api/auth/logout
+      - GET /api/auth/me
+      - PUT /api/auth/password
+    </auth>
+    <experts>
+      - GET /api/experts  (supports ?sort=alpha|recent|category, ?search=, ?category=)
+      - POST /api/experts
+      - GET /api/experts/suggest?query=  (ranked expert suggestions for auto-routing)
+      - GET /api/experts/:id
+      - PUT /api/experts/:id
+      - DELETE /api/experts/:id
+      - GET /api/experts/:id/memory
+      - POST /api/experts/:id/memory
+      - PUT /api/experts/:id/memory/:memId
+      - DELETE /api/experts/:id/memory/:memId
+      - DELETE /api/experts/:id/memory  (clear all memories)
+      - GET /api/experts/:id/export
+      - POST /api/experts/import
+    </experts>
+    <categories>
+      - GET /api/categories
+      - POST /api/categories
+      - DELETE /api/categories/:id
+    </categories>
+    <backends>
+      - GET /api/backends
+      - POST /api/backends
+      - PUT /api/backends/:id
+      - DELETE /api/backends/:id
+      - POST /api/backends/:id/test
+      - GET /api/backends/:id/models
+    </backends>
+    <conversations>
+      - GET /api/conversations  (supports ?expert=, ?search=, ?type=)
+      - POST /api/conversations
+      - GET /api/conversations/:id
+      - PUT /api/conversations/:id
+      - DELETE /api/conversations/:id
+      - GET /api/conversations/:id/messages
+      - POST /api/conversations/:id/messages  (triggers SSE streaming AI response)
+      - POST /api/conversations/:id/documents  (multipart upload)
+      - DELETE /api/conversations/:id/documents/:docId
+    </conversations>
+    <settings>
+      - GET /api/settings
+      - PUT /api/settings
+    </settings>
+    <admin>
+      - GET /api/admin/users
+      - POST /api/admin/users
+      - PUT /api/admin/users/:id
+      - DELETE /api/admin/users/:id
+    </admin>
+  </api_endpoints_summary>
+
+  <ui_layout>
+    <main_structure>
+      Two-column layout:
+      - Left sidebar (fixed, ~260px wide): Sage logo at top, navigation links
+        (Expert Library, Conversations, Settings, Admin if admin role),
+        user name and logout button at bottom
+      - Main content area: renders the active view based on current route
+    </main_structure>
+    <expert_library_page>
+      - Toolbar: search input, sort dropdown (Alphabetical/Category/Recently Used),
+        view toggle (grid/list), "New Expert" button, "Select Multiple" toggle
+      - Grid view: Expert cards showing name, domain chip, personality badge,
+        last used date, and quick-chat icon button
+      - List view: compact table-style rows with same fields
+      - Category filter chips row above the grid
+      - Empty state with illustration and "Create your first Expert" CTA button
+    </expert_library_page>
+    <expert_creation_wizard>
+      - Step 1: Name + Description
+      - Step 2: Domain / Topic (free text with example suggestions shown)
+      - Step 3: Personality / Tone (visual card selector with description for each option)
+      - Step 4: Behavior toggles (5 toggles with labels and descriptions)
+      - Step 5: AI Model override (use global default OR pick a specific backend + model)
+      - Step 6: Preview generated system prompt and confirm
+      - Step progress indicator at top (1 of 6, 2 of 6, etc.)
+      - Back and Next buttons; final step has "Create Expert" button
+    </expert_creation_wizard>
+    <conversation_page>
+      - Left panel: conversation history list with search field and Expert/type filter
+      - Main chat area: messages in a scrollable feed with Expert name badge, markdown
+        rendering, document attachment chips, streaming typing indicator
+      - Input area at bottom: text field, document upload button (clip icon), Expert
+        selector (shows current Expert with option to reassign), Send button
+      - Top bar: editable conversation title, Expert(s) badge, conversation type badge
+      - New conversation button at top of history panel
+    </conversation_page>
+    <crossfire_page>
+      - Expert selector panel: list of user's Experts, each with a model/backend assignment dropdown
+      - Single question input field
+      - Response area: side-by-side panels for 2 experts, grid for 3+
+      - Each response panel: Expert name header, model used badge, response content
+      - Debate mode toggle at top
+      - Export button
+    </crossfire_page>
+    <settings_page>
+      - Tabbed interface: Appearance | AI Backends | Account | Admin (admin only)
+      - Appearance tab: light/dark theme toggle with live preview
+      - AI Backends tab: cards per backend with connection status badge, Add Backend button,
+        global default model selector with auto-detected model list
+      - Account tab: read-only profile info, change password form
+      - Admin tab: user management table (email, role, created date) with action buttons
+    </settings_page>
+  </ui_layout>
+
+  <design_system>
+    <color_palette>
+      Dark theme (default):
+      - Background: #0f0f13 (near-black base)
+      - Surface: #1a1a24 (card and panel background)
+      - Surface elevated: #22223a (modals, dropdowns)
+      - Border: #2d2d3d
+      - Primary accent: #7c3aed (violet — knowledge, wisdom, AI)
+      - Secondary accent: #06b6d4 (cyan — technology, data)
+      - Text primary: #f1f0ff
+      - Text secondary: #9b99b8
+      - Text muted: #5a5878
+      - Success: #10b981
+      - Warning: #f59e0b
+      - Destructive: #ef4444
+      Light theme:
+      - Background: #f8f7ff
+      - Surface: #ffffff
+      - Surface elevated: #f0eeff
+      - Border: #e2e0f0
+      - Same accent, success, warning, destructive colors as dark
+      - Text primary: #1a1830
+      - Text secondary: #4a4870
+    </color_palette>
+    <typography>
+      - UI Font: Inter (sans-serif)
+      - Code / monospace: JetBrains Mono
+      - Base font size: 14px
+      - Headings: font-weight 600
+      - Markdown rendered in chat messages with proper heading sizes, code blocks, lists
+    </typography>
+  </design_system>
+
+  <implementation_steps>
+    <step number="1">
+      <title>Infrastructure and Project Scaffold</title>
+      <tasks>
+        - Initialize Node.js/Express/TypeScript backend
+        - Set up SQLite database with better-sqlite3 and create all tables
+        - Create GET /api/health endpoint returning DB status
+        - Initialize React/Vite/TypeScript frontend
+        - Configure Tailwind CSS v4 with dark/light CSS variables
+        - Configure CORS, JSON middleware, cookie-parser
+        - Set up React Router with authenticated route guard component
+        - Set up TanStack Query provider
+      </tasks>
+    </step>
+    <step number="2">
+      <title>Authentication System</title>
+      <tasks>
+        - POST /api/auth/register (hash password, create user, set cookie)
+        - POST /api/auth/login (verify password, issue JWT in HttpOnly cookie)
+        - POST /api/auth/logout (clear cookie)
+        - GET /api/auth/me (return authenticated user data)
+        - PUT /api/auth/password (change password)
+        - Auth middleware for all protected routes
+        - Login and registration pages in React
+        - Protected route component that redirects unauthenticated users
+        - User profile page
+      </tasks>
+    </step>
+    <step number="3">
+      <title>AI Backend Configuration</title>
+      <tasks>
+        - CRUD endpoints for ai_backends table
+        - POST /api/backends/:id/test (call backend health/ping)
+        - GET /api/backends/:id/models (auto-detect from Ollama /api/tags, LMStudio /v1/models)
+        - AI Backends UI in Settings page (add, edit, delete, test, list models)
+        - Global default model selector
+        - Backend-type-specific form fields per type
+      </tasks>
+    </step>
+    <step number="4">
+      <title>Expert Management and Configuration</title>
+      <tasks>
+        - CRUD endpoints for experts, expert_behaviors, expert_categories, expert_category_map
+        - Export (GET /api/experts/:id/export) and import (POST /api/experts/import)
+        - Expert creation wizard UI (6 steps)
+        - Expert library dashboard with grid/list views, sorting, filtering, search
+        - Expert detail page and edit form
+        - Expert system prompt preview and generation logic
+        - Category management UI
+      </tasks>
+    </step>
+    <step number="5">
+      <title>Expert Memory System</title>
+      <tasks>
+        - CRUD endpoints for expert_memories
+        - Manual memory add/edit/delete UI on Expert detail page
+        - Auto-extraction: after conversation, send transcript to AI to extract key facts, save as 'auto' memories
+        - Memory panel UI with list, add, edit, delete, clear-all
+        - Include memories in Expert system prompt context when sending to AI
+      </tasks>
+    </step>
+    <step number="6">
+      <title>Standard Conversations and Document Handling</title>
+      <tasks>
+        - Conversation CRUD endpoints
+        - Message send endpoint with SSE streaming (POST /api/conversations/:id/messages)
+        - AI backend routing: resolve expert override or global default, call correct backend
+        - GET /api/experts/suggest?query= (keyword match expert domains, return ranked list)
+        - Conversation history list UI with search and filter
+        - Chat interface with streaming responses, markdown rendering, copy button
+        - Document upload via Multer (validate types, store file, extract text)
+        - PDF text extraction (pdfjs-dist), DOCX extraction (mammoth)
+        - Auto-trigger cursory review message after document upload
+      </tasks>
+    </step>
+    <step number="7">
+      <title>Multi-Expert and Crossfire Conversations</title>
+      <tasks>
+        - Multi-expert conversation type: conversation_experts rows, panel/thread layout
+        - Expert picker UI for selecting multiple experts
+        - Expert-to-expert debate toggle and message routing logic
+        - Crossfire conversation type: per-expert backend/model assignment UI
+        - Side-by-side comparison response layout
+        - Export Crossfire results
+        - @mention parsing in messages
+      </tasks>
+    </step>
+    <step number="8">
+      <title>Settings, Admin, and Polish</title>
+      <tasks>
+        - Light/dark theme toggle with CSS class switching and persistence
+        - Settings page with all tabs implemented
+        - Admin panel: user list, create/edit/delete, role assignment, 403 enforcement
+        - Keyboard shortcuts overlay (? key)
+        - Toast notifications for all actions (success, error, info)
+        - Loading skeletons and empty states throughout
+        - Final layout polish and error boundary handling
+      </tasks>
+    </step>
+  </implementation_steps>
+
+  <success_criteria>
+    <functionality>
+      - User can create multiple Experts with distinct personalities, domains, and behaviors
+      - Consulting an Expert produces a real AI response using the configured backend
+      - Expert memory is applied across conversations and can be viewed and edited
+      - Document upload triggers an automatic Expert review and enables follow-up Q&A
+      - Crossfire conversations work with different models assigned per Expert
+      - All data persists across browser refreshes and full server restarts
+    </functionality>
+    <user_experience>
+      - App is fast and comfortable for daily use as a personal expert studio
+      - Expert creation wizard is quick and intuitive to complete
+      - Conversation interface feels natural, like a polished chat app
+      - Dark mode looks professional and easy on the eyes
+      - Navigation between Expert library and conversations is frictionless
+    </user_experience>
+    <technical_quality>
+      - No mock data — all data stored in and retrieved from SQLite
+      - JWT authentication works correctly with protected routes enforced
+      - SSE streaming delivers AI responses token-by-token
+      - File uploads handled reliably for all supported types
+      - No unhandled console errors during normal usage
+    </technical_quality>
+    <design_polish>
+      - Violet + dark theme feels premium and fitting for an AI knowledge tool
+      - Expert cards are visually distinct and immediately informative
+      - Markdown in chat renders cleanly with proper code block styling
+      - Loading, empty, and error states are handled gracefully everywhere
+    </design_polish>
+  </success_criteria>
+
+</project_specification>
