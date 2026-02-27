@@ -403,7 +403,13 @@ export default function ExpertDetailPage() {
 
         {/* Behaviors Card */}
         <div className="bg-surface rounded-xl border border-border p-6">
-          <h2 className="text-lg font-medium text-text-primary mb-5">Behaviors</h2>
+          <h2 className="text-lg font-medium text-text-primary mb-2">Behaviors</h2>
+          <p className="text-sm text-text-muted mb-4">
+            <span className={behaviors.filter((b) => b.enabled).length > 0 ? 'text-green-500' : 'text-text-muted'}>
+              {behaviors.filter((b) => b.enabled).length}
+            </span>{' '}
+            of {behaviors.length} behaviors enabled
+          </p>
           <div className="space-y-4">
             {behaviors.map((b) => (
               <label key={b.id} className="flex items-center justify-between cursor-pointer">
