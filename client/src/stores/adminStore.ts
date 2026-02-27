@@ -28,6 +28,7 @@ interface AdminState {
   fetchUsers: () => Promise<void>;
   updateUserRole: (id: number, role: string) => Promise<void>;
   deleteUser: (id: number) => Promise<void>;
+  resetUserPassword: (id: number) => Promise<string>;
   fetchStats: () => Promise<void>;
 }
 
@@ -70,6 +71,13 @@ export const useAdminStore = create<AdminState>((set) => ({
     } catch (err: any) {
       toast.error(err.message || 'Failed to delete user');
     }
+  },
+
+  resetUserPassword: async (id) => {
+    const { tempPassword } = await api<{ tempPassword: string }>(`/api/admin/users/${id}/password`, {
+      method: 'PUT',
+    });
+    return tempPassword;
   },
 
   fetchStats: async () => {

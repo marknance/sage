@@ -158,6 +158,13 @@ db.exec(`
   );
 `);
 
+// Migration: add must_change_password column
+try {
+  db.exec('ALTER TABLE users ADD COLUMN must_change_password INTEGER DEFAULT 0');
+} catch {
+  // Column already exists
+}
+
 // Seed admin user if not exists
 const existingAdmin = db.prepare('SELECT id FROM users WHERE email = ?').get('admin@sage.local');
 if (!existingAdmin) {

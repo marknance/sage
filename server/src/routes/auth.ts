@@ -62,8 +62,8 @@ router.post('/login', async (req, res) => {
   }
 
   const user = db.prepare(
-    'SELECT id, username, email, password_hash, role FROM users WHERE email = ?'
-  ).get(email) as { id: number; username: string; email: string; password_hash: string; role: string } | undefined;
+    'SELECT id, username, email, password_hash, role, must_change_password FROM users WHERE email = ?'
+  ).get(email) as { id: number; username: string; email: string; password_hash: string; role: string; must_change_password: number } | undefined;
 
   if (!user) {
     res.status(401).json({ error: 'Invalid email or password' });
@@ -83,6 +83,7 @@ router.post('/login', async (req, res) => {
       username: user.username,
       email: user.email,
       role: user.role,
+      must_change_password: !!user.must_change_password,
     },
   });
 });
@@ -175,7 +176,7 @@ router.put('/password', authenticate, async (req, res) => {
   }
 
   const newHash = await bcrypt.hash(newPassword, 10);
-  db.prepare('UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(newHash, req.user!.id);
+  db.prepare('UPDATE users SET password_hash = ?, must_change_password = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(newHash, req.user!.id);
 
   res.json({ message: 'Password updated' });
 });

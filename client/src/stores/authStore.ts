@@ -6,6 +6,7 @@ interface User {
   username: string;
   email: string;
   role: string;
+  must_change_password?: boolean;
   created_at?: string;
 }
 

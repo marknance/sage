@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Outlet, Navigate } from 'react-router';
+import { Outlet, Navigate, useLocation } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
 import NavBar from './NavBar';
 
@@ -9,6 +9,7 @@ interface ProtectedRouteProps {
 
 export default function ProtectedRoute({ requiredRole }: ProtectedRouteProps) {
   const { isLoading, isAuthenticated, user, fetchUser } = useAuthStore();
+  const location = useLocation();
 
   useEffect(() => {
     if (isLoading) {
@@ -30,6 +31,10 @@ export default function ProtectedRoute({ requiredRole }: ProtectedRouteProps) {
 
   if (requiredRole && user?.role !== requiredRole) {
     return <Navigate to="/" replace />;
+  }
+
+  if (user?.must_change_password && location.pathname !== '/profile') {
+    return <Navigate to="/profile" replace />;
   }
 
   return (

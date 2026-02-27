@@ -17,6 +17,7 @@ declare global {
         username: string;
         email: string;
         role: string;
+        must_change_password?: number;
         created_at: string;
       };
     }
@@ -44,7 +45,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
   try {
     const payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
     const user = db.prepare(
-      'SELECT id, username, email, role, created_at FROM users WHERE id = ?'
+      'SELECT id, username, email, role, must_change_password, created_at FROM users WHERE id = ?'
     ).get(payload.userId) as Request['user'] | undefined;
 
     if (!user) {

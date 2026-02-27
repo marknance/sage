@@ -1,11 +1,13 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useAdminStore } from '../stores/adminStore';
 import { useAuthStore } from '../stores/authStore';
+import { toast } from '../stores/toastStore';
 
 export default function AdminUsersPage() {
-  const { users, isLoading, fetchUsers, updateUserRole, deleteUser } = useAdminStore();
+  const { users, isLoading, fetchUsers, updateUserRole, deleteUser, resetUserPassword } = useAdminStore();
   const currentUser = useAuthStore((s) => s.user);
+  const [tempPasswordModal, setTempPasswordModal] = useState<{ username: string; password: string } | null>(null);
 
   useEffect(() => {
     fetchUsers();
@@ -59,16 +61,31 @@ export default function AdminUsersPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       {user.id !== currentUser?.id && (
-                        <button
-                          onClick={() => {
-                            if (confirm(`Delete user "${user.username}"? This cannot be undone.`)) {
-                              deleteUser(user.id);
-                            }
-                          }}
-                          className="text-sm text-destructive hover:underline"
-                        >
-                          Delete
-                        </button>
+                        <div className="flex gap-3 justify-end">
+                          <button
+                            onClick={async () => {
+                              try {
+                                const pw = await resetUserPassword(user.id);
+                                setTempPasswordModal({ username: user.username, password: pw });
+                              } catch (err: any) {
+                                toast.error(err.message || 'Failed to reset password');
+                              }
+                            }}
+                            className="text-sm text-primary hover:underline"
+                          >
+                            Reset PW
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm(`Delete user "${user.username}"? This cannot be undone.`)) {
+                                deleteUser(user.id);
+                              }
+                            }}
+                            className="text-sm text-destructive hover:underline"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -78,6 +95,27 @@ export default function AdminUsersPage() {
           </div>
         )}
       </div>
+
+      {tempPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-surface border border-border rounded-xl p-6 max-w-sm mx-4">
+            <h3 className="text-lg font-medium text-text-primary mb-2">Password Reset</h3>
+            <p className="text-sm text-text-secondary mb-3">
+              Temporary password for <strong>{tempPasswordModal.username}</strong>:
+            </p>
+            <code className="block p-3 rounded-lg bg-background text-text-primary text-sm font-mono mb-4 select-all">
+              {tempPasswordModal.password}
+            </code>
+            <p className="text-xs text-text-muted mb-4">The user will be required to change their password on next login.</p>
+            <button
+              onClick={() => setTempPasswordModal(null)}
+              className="w-full py-2 rounded-lg bg-primary text-white text-sm font-medium hover:opacity-90 transition-opacity"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

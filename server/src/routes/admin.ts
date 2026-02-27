@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import bcrypt from 'bcrypt';
+import crypto from 'node:crypto';
 import { db } from '../index.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 
@@ -50,6 +52,23 @@ router.delete('/users/:id', (req, res) => {
   }
 
   res.json({ message: 'User deleted' });
+});
+
+// PUT /users/:id/password — admin reset user password
+router.put('/users/:id/password', async (req, res) => {
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(req.params.id);
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+
+  const tempPassword = crypto.randomBytes(6).toString('base64url');
+  const hash = await bcrypt.hash(tempPassword, 10);
+
+  db.prepare('UPDATE users SET password_hash = ?, must_change_password = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    .run(hash, req.params.id);
+
+  res.json({ tempPassword });
 });
 
 // GET /stats — system statistics
