@@ -12,6 +12,7 @@ import categoriesRouter from './routes/categories.js';
 import conversationsRouter from './routes/conversations.js';
 import backendsRouter from './routes/backends.js';
 import settingsRouter from './routes/settings.js';
+import adminRouter from './routes/admin.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -179,6 +180,7 @@ app.use('/api/categories', categoriesRouter);
 app.use('/api/conversations', conversationsRouter);
 app.use('/api/backends', backendsRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/admin', adminRouter);
 
 // Health endpoint
 app.get('/api/health', (_req, res) => {

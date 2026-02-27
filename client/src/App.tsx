@@ -12,6 +12,8 @@ import ConversationsPage from './pages/ConversationsPage';
 import ConversationPage from './pages/ConversationPage';
 import BackendsPage from './pages/BackendsPage';
 import BackendFormPage from './pages/BackendFormPage';
+import AdminDashboardPage from './pages/AdminDashboardPage';
+import AdminUsersPage from './pages/AdminUsersPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,9 +48,10 @@ function App() {
             <Route path="/" element={<Navigate to="/conversations" replace />} />
           </Route>
 
-          {/* Admin routes (stub) */}
+          {/* Admin routes */}
           <Route element={<ProtectedRoute requiredRole="admin" />}>
-            {/* Future admin pages go here */}
+            <Route path="/admin" element={<AdminDashboardPage />} />
+            <Route path="/admin/users" element={<AdminUsersPage />} />
           </Route>
 
           {/* Catch-all */}

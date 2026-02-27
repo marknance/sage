@@ -1,9 +1,11 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useConversationStore } from '../stores/conversationStore';
+import { useAuthStore } from '../stores/authStore';
 
 export default function ConversationsPage() {
   const { conversations, total, limit, offset, isLoading, fetchConversations, createConversation } = useConversationStore();
+  const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('recent');
@@ -47,6 +49,14 @@ export default function ConversationsPage() {
             >
               Profile
             </Link>
+            {user?.role === 'admin' && (
+              <Link
+                to="/admin"
+                className="px-4 py-2 rounded-lg border border-border text-text-secondary hover:text-text-primary transition-colors"
+              >
+                Admin
+              </Link>
+            )}
             <button
               onClick={handleNew}
               className="px-4 py-2 rounded-lg bg-primary text-white font-medium hover:opacity-90 transition-opacity"
