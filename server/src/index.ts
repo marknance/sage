@@ -13,6 +13,7 @@ import conversationsRouter from './routes/conversations.js';
 import backendsRouter from './routes/backends.js';
 import settingsRouter from './routes/settings.js';
 import adminRouter from './routes/admin.js';
+import { authLimiter, apiLimiter, streamLimiter } from './middleware/rateLimit.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -172,6 +173,12 @@ const uploadsDir = path.join(__dirname, '..', 'data', 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
+
+// Rate limiting
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/conversations/:id/messages/stream', streamLimiter);
+app.use('/api', apiLimiter);
 
 // API routes
 app.use('/api/auth', authRouter);
