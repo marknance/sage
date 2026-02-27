@@ -39,7 +39,8 @@ router.get('/', (req, res) => {
   let query = `
     SELECT c.*,
       (SELECT COUNT(*) FROM conversation_experts ce WHERE ce.conversation_id = c.id) as expert_count,
-      (SELECT m.content FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message
+      (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) as message_count,
+      (SELECT m2.content FROM messages m2 WHERE m2.conversation_id = c.id ORDER BY m2.created_at DESC LIMIT 1) as last_message
     FROM conversations c
     WHERE c.user_id = ?
   `;

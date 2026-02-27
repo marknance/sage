@@ -14,6 +14,7 @@ export interface Conversation {
   is_pinned?: number;
   updated_at: string;
   expert_count?: number;
+  message_count?: number;
   last_message?: string | null;
 }
 

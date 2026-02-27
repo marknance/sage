@@ -143,7 +143,7 @@ export default function ConversationsPage() {
                   <p className="text-sm text-text-muted mb-3 line-clamp-2">{conv.last_message}</p>
                 )}
                 <div className="flex items-center justify-between text-xs text-text-muted">
-                  <span>{conv.expert_count || 0} expert{conv.expert_count !== 1 ? 's' : ''}</span>
+                  <span>{conv.expert_count || 0} expert{conv.expert_count !== 1 ? 's' : ''} &middot; {conv.message_count || 0} msg{conv.message_count !== 1 ? 's' : ''}</span>
                   <span>{new Date(conv.updated_at).toLocaleDateString()}</span>
                 </div>
                 </Link>
