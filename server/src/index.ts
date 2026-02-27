@@ -3,8 +3,9 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import Database from 'better-sqlite3';
+import Database, { type Database as DatabaseType } from 'better-sqlite3';
 import bcrypt from 'bcrypt';
+import authRouter from './routes/auth.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,7 +23,7 @@ app.use(cookieParser());
 
 // Database initialization
 const dbPath = path.join(__dirname, '..', 'data', 'sage.db');
-const db = new Database(dbPath);
+const db: DatabaseType = new Database(dbPath);
 
 // Enable WAL mode for better concurrent performance
 db.pragma('journal_mode = WAL');
@@ -158,6 +159,9 @@ if (!existingAdmin) {
   ).run('Admin', 'admin@sage.local', passwordHash, 'admin');
   console.log('Seeded admin user: admin@sage.local / admin123');
 }
+
+// Auth routes
+app.use('/api/auth', authRouter);
 
 // Health endpoint
 app.get('/api/health', (_req, res) => {
