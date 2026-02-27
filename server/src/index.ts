@@ -172,6 +172,13 @@ try {
   // Column already exists
 }
 
+// Migration: add default_conversation_type to settings
+try {
+  db.exec("ALTER TABLE settings ADD COLUMN default_conversation_type TEXT DEFAULT 'standard'");
+} catch {
+  // Column already exists
+}
+
 // Seed admin user if not exists
 const existingAdmin = db.prepare('SELECT id FROM users WHERE email = ?').get('admin@sage.local');
 if (!existingAdmin) {

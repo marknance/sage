@@ -21,7 +21,7 @@ router.get('/', (req, res) => {
 // PUT / — update user settings
 router.put('/', (req, res) => {
   const userId = req.user!.id;
-  const { theme, default_backend_id, default_model } = req.body;
+  const { theme, default_backend_id, default_model, default_conversation_type } = req.body;
 
   // Ensure row exists
   const existing = db.prepare('SELECT id FROM settings WHERE user_id = ?').get(userId);
@@ -34,12 +34,14 @@ router.put('/', (req, res) => {
       theme = COALESCE(?, theme),
       default_backend_id = ?,
       default_model = ?,
+      default_conversation_type = COALESCE(?, default_conversation_type),
       updated_at = CURRENT_TIMESTAMP
     WHERE user_id = ?
   `).run(
     theme ?? null,
     default_backend_id !== undefined ? (default_backend_id || null) : null,
     default_model !== undefined ? (default_model || null) : null,
+    default_conversation_type ?? null,
     userId
   );
 

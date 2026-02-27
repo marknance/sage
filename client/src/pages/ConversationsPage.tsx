@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { api } from '../lib/api';
 import { useConversationStore } from '../stores/conversationStore';
 
 export default function ConversationsPage() {
@@ -11,6 +12,12 @@ export default function ConversationsPage() {
 
   const [page, setPage] = useState(0);
   const [newType, setNewType] = useState('standard');
+
+  useEffect(() => {
+    api<{ settings: any }>('/api/settings').then(({ settings }) => {
+      if (settings.default_conversation_type) setNewType(settings.default_conversation_type);
+    }).catch(() => {});
+  }, []);
   const [filterType, setFilterType] = useState('');
   const [pinnedOnly, setPinnedOnly] = useState(false);
 
