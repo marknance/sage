@@ -557,6 +557,15 @@ router.post('/:id/messages/stream', async (req, res) => {
     if (!disconnected) {
       db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(req.params.id);
       sendEvent('done', {});
+
+      // Async memory extraction for memory-enabled experts
+      for (const expert of assignedExperts) {
+        if (expert.memory_enabled) {
+          extractMemories(expert, Number(req.params.id), req.user!.id).catch((err) =>
+            console.error('Memory extraction failed:', err.message)
+          );
+        }
+      }
     }
     res.end();
   } catch (err: any) {
@@ -762,6 +771,60 @@ function getDocumentContext(conversationId: string): string {
   if (docs.length === 0) return '';
   const parts = docs.map((d) => `[Document: ${d.filename}]\n${d.extracted_text}`);
   return '\n\nReference documents:\n' + parts.join('\n\n');
+}
+
+async function extractMemories(expert: any, conversationId: number, userId: number): Promise<void> {
+  // Get the last few messages from the conversation
+  const recentMessages = db.prepare(`
+    SELECT role, content FROM messages
+    WHERE conversation_id = ?
+    ORDER BY created_at DESC
+    LIMIT 6
+  `).all(conversationId) as { role: string; content: string }[];
+
+  if (recentMessages.length < 2) return;
+
+  const reversed = recentMessages.reverse();
+  const conversationText = reversed.map((m) => `${m.role}: ${m.content}`).join('\n\n');
+
+  const extractionPrompt = `Analyze this conversation and extract key facts, preferences, or important information that should be remembered about the user for future conversations. Return ONLY a JSON array of short fact strings. If no memorable facts, return [].
+
+Conversation:
+${conversationText}
+
+Return JSON array only:`;
+
+  const userSettings = db.prepare('SELECT default_backend_id FROM settings WHERE user_id = ?')
+    .get(userId) as { default_backend_id: number | null } | undefined;
+  const backendId = expert.backend_override_id || expert.backend_id;
+  const backend = resolveBackendConfig(backendId, userSettings?.default_backend_id, db);
+
+  try {
+    const response = await chatCompletion({
+      messages: [{ role: 'user', content: extractionPrompt }],
+      backend,
+    });
+
+    // Parse the JSON array from the response
+    const jsonMatch = response.match(/\[[\s\S]*?\]/);
+    if (!jsonMatch) return;
+
+    const facts = JSON.parse(jsonMatch[0]) as string[];
+    if (!Array.isArray(facts) || facts.length === 0) return;
+
+    const insertStmt = db.prepare(
+      'INSERT INTO expert_memories (expert_id, memory_type, content, source_conversation_id) VALUES (?, ?, ?, ?)'
+    );
+
+    for (const fact of facts.slice(0, 5)) {
+      if (typeof fact === 'string' && fact.trim().length > 0) {
+        insertStmt.run(expert.id, 'extracted', fact.trim(), conversationId);
+      }
+    }
+  } catch (err) {
+    // Extraction is best-effort, don't fail the conversation
+    throw err;
+  }
 }
 
 function findSuggestedExperts(userId: number, messageContent: string, excludeExperts: any[]): any[] {
