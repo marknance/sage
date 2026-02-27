@@ -46,7 +46,7 @@ interface AdminState {
   adminExperts: AdminExpert[];
   adminExpertsTotal: number;
 
-  fetchUsers: () => Promise<void>;
+  fetchUsers: (params?: { search?: string }) => Promise<void>;
   updateUserRole: (id: number, role: string) => Promise<void>;
   deleteUser: (id: number) => Promise<void>;
   resetUserPassword: (id: number) => Promise<string>;
@@ -66,10 +66,13 @@ export const useAdminStore = create<AdminState>((set) => ({
   adminExperts: [],
   adminExpertsTotal: 0,
 
-  fetchUsers: async () => {
+  fetchUsers: async (params) => {
     set({ isLoading: true });
     try {
-      const { users } = await api<{ users: AdminUser[] }>('/api/admin/users');
+      const query = new URLSearchParams();
+      if (params?.search) query.set('search', params.search);
+      const qs = query.toString();
+      const { users } = await api<{ users: AdminUser[] }>(`/api/admin/users${qs ? `?${qs}` : ''}`);
       set({ users, isLoading: false });
     } catch (err: any) {
       set({ isLoading: false });

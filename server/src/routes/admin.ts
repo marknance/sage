@@ -9,10 +9,20 @@ router.use(authenticate);
 router.use(requireRole('admin'));
 
 // GET /users — list all users
-router.get('/users', (_req, res) => {
-  const users = db.prepare(
-    'SELECT id, username, email, role, created_at, updated_at FROM users ORDER BY created_at DESC'
-  ).all();
+router.get('/users', (req, res) => {
+  const { search } = req.query;
+
+  let query = 'SELECT id, username, email, role, created_at, updated_at FROM users';
+  const params: any[] = [];
+
+  if (search && typeof search === 'string') {
+    query += ' WHERE (username LIKE ? OR email LIKE ?)';
+    const term = `%${search}%`;
+    params.push(term, term);
+  }
+
+  query += ' ORDER BY created_at DESC';
+  const users = db.prepare(query).all(...params);
   res.json({ users });
 });
 

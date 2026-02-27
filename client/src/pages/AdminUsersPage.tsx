@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router';
 import { useAdminStore } from '../stores/adminStore';
 import { useAuthStore } from '../stores/authStore';
@@ -8,10 +8,16 @@ export default function AdminUsersPage() {
   const { users, isLoading, fetchUsers, updateUserRole, deleteUser, resetUserPassword } = useAdminStore();
   const currentUser = useAuthStore((s) => s.user);
   const [tempPasswordModal, setTempPasswordModal] = useState<{ username: string; password: string } | null>(null);
+  const [search, setSearch] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchUsers({ search: search || undefined });
+    }, search ? 300 : 0);
+    return () => clearTimeout(debounceRef.current);
+  }, [search, fetchUsers]);
 
   return (
     <div className="min-h-screen bg-background px-4 py-8">
@@ -24,6 +30,16 @@ export default function AdminUsersPage() {
           >
             Dashboard
           </Link>
+        </div>
+
+        <div className="mb-6">
+          <input
+            type="text"
+            placeholder="Search users by name or email..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full max-w-sm px-3 py-2 rounded-lg bg-surface border border-border text-text-primary focus:outline-none focus:border-primary"
+          />
         </div>
 
         {isLoading ? (
