@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router';
+import { useEffect, useState, useCallback } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
 import { useThemeStore } from '../stores/themeStore';
 
@@ -13,11 +13,43 @@ const NAV_ITEMS = [
 
 export default function NavBar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const { theme, toggle, init } = useThemeStore();
   const [health, setHealth] = useState<'ok' | 'error' | 'checking'>('checking');
 
   useEffect(() => { init(); }, [init]);
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // Ctrl/Cmd+K — focus search on conversations page
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      if (location.pathname !== '/conversations') {
+        navigate('/conversations');
+      }
+      // Focus the search input after navigation
+      setTimeout(() => {
+        const input = document.querySelector<HTMLInputElement>('input[placeholder*="Search conversations"]');
+        input?.focus();
+        input?.select();
+      }, 100);
+    }
+    // Escape — close topmost modal (any element with z-50 fixed overlay)
+    if (e.key === 'Escape') {
+      const modal = document.querySelector('.fixed.inset-0.z-50');
+      if (modal) {
+        const closeBtn = modal.querySelector<HTMLButtonElement>('button');
+        if (closeBtn?.textContent?.includes('Cancel') || closeBtn?.textContent?.includes('Close') || closeBtn?.textContent?.includes('Done')) {
+          closeBtn.click();
+        }
+      }
+    }
+  }, [location.pathname, navigate]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
 
   useEffect(() => {
     const check = () => {
@@ -72,7 +104,24 @@ export default function NavBar() {
           </Link>
         )}
       </div>
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-2">
+        <button
+          onClick={() => {
+            if (location.pathname !== '/conversations') navigate('/conversations');
+            setTimeout(() => {
+              const input = document.querySelector<HTMLInputElement>('input[placeholder*="Search conversations"]');
+              input?.focus();
+              input?.select();
+            }, 100);
+          }}
+          className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-lg border border-border text-text-muted text-xs hover:text-text-secondary hover:border-border transition-colors"
+          title="Search conversations (Ctrl+K)"
+        >
+          Search
+          <kbd className="px-1 py-0.5 rounded bg-background border border-border text-[10px]">
+            {navigator.platform?.includes('Mac') ? '\u2318' : 'Ctrl'}K
+          </kbd>
+        </button>
         <button
           onClick={toggle}
           className="px-2 py-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-background transition-colors text-sm"
