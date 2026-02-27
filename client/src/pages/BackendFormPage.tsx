@@ -1,6 +1,7 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { useNavigate, useParams, Link } from 'react-router';
 import { useBackendStore } from '../stores/backendStore';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 
 const TYPE_OPTIONS = ['ollama', 'openai', 'anthropic', 'lmstudio', 'custom'];
 
@@ -28,6 +29,9 @@ export default function BackendFormPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
+  const initialValues = useRef({ name: '', type: 'ollama', base_url: TYPE_DEFAULTS.ollama, api_key: '', org_id: '', is_active: true });
+  const isDirty = name !== initialValues.current.name || type !== initialValues.current.type || base_url !== initialValues.current.base_url || api_key !== initialValues.current.api_key || org_id !== initialValues.current.org_id || is_active !== initialValues.current.is_active;
+  const blocker = useUnsavedChanges(isDirty);
 
   useEffect(() => {
     clearTestResult();
@@ -44,6 +48,7 @@ export default function BackendFormPage() {
       setOrgId(currentBackend.org_id || '');
       setIsActive(!!currentBackend.is_active);
       setApiKey('');
+      initialValues.current = { name: currentBackend.name, type: currentBackend.type, base_url: currentBackend.base_url || '', api_key: '', org_id: currentBackend.org_id || '', is_active: !!currentBackend.is_active };
     }
   }, [isEdit, currentBackend]);
 
@@ -270,6 +275,29 @@ export default function BackendFormPage() {
             {loading ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Backend'}
           </button>
         </form>
+
+        {blocker.state === 'blocked' && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-surface border border-border rounded-xl p-6 max-w-sm mx-4">
+              <h3 className="text-lg font-medium text-text-primary mb-2">Leave without saving?</h3>
+              <p className="text-sm text-text-secondary mb-4">You have unsaved changes that will be lost.</p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => blocker.reset?.()}
+                  className="px-4 py-2 rounded-lg border border-border text-text-secondary text-sm hover:text-text-primary transition-colors"
+                >
+                  Stay
+                </button>
+                <button
+                  onClick={() => blocker.proceed?.()}
+                  className="px-4 py-2 rounded-lg bg-destructive text-white text-sm"
+                >
+                  Leave
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

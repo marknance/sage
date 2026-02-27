@@ -1,7 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, useRef, type FormEvent } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { useExpertStore, type Behavior } from '../stores/expertStore';
 import { useBackendStore } from '../stores/backendStore';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 
 const TONE_OPTIONS = ['formal', 'casual', 'technical', 'friendly', 'concise'];
 
@@ -57,6 +58,9 @@ export default function ExpertDetailPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [addCategoryId, setAddCategoryId] = useState('');
 
+  const originalForm = useRef(editForm);
+  const isDirty = editing && JSON.stringify(editForm) !== JSON.stringify(originalForm.current);
+  const blocker = useUnsavedChanges(isDirty);
   const expertId = Number(id);
 
   useEffect(() => {
@@ -76,7 +80,7 @@ export default function ExpertDetailPage() {
 
   useEffect(() => {
     if (currentExpert) {
-      setEditForm({
+      const form = {
         name: currentExpert.name,
         domain: currentExpert.domain,
         description: currentExpert.description || '',
@@ -85,7 +89,9 @@ export default function ExpertDetailPage() {
         backend_id: currentExpert.backend_id ? String(currentExpert.backend_id) : '',
         model_override: currentExpert.model_override || '',
         memory_enabled: currentExpert.memory_enabled,
-      });
+      };
+      setEditForm(form);
+      originalForm.current = form;
     }
   }, [currentExpert]);
 
@@ -534,6 +540,30 @@ export default function ExpertDetailPage() {
             </div>
           )}
         </div>
+
+        {/* Unsaved changes dialog */}
+        {blocker.state === 'blocked' && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-surface border border-border rounded-xl p-6 max-w-sm mx-4">
+              <h3 className="text-lg font-medium text-text-primary mb-2">Leave without saving?</h3>
+              <p className="text-sm text-text-secondary mb-4">You have unsaved changes that will be lost.</p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => blocker.reset?.()}
+                  className="px-4 py-2 rounded-lg border border-border text-text-secondary text-sm hover:text-text-primary transition-colors"
+                >
+                  Stay
+                </button>
+                <button
+                  onClick={() => blocker.proceed?.()}
+                  className="px-4 py-2 rounded-lg bg-destructive text-white text-sm"
+                >
+                  Leave
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
