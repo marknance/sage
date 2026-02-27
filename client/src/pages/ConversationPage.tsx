@@ -223,6 +223,7 @@ export default function ConversationPage() {
   const isDark = useThemeStore((s) => s.theme) === 'dark';
 
   const [input, setInput] = useState('');
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
@@ -274,6 +275,7 @@ export default function ConversationPage() {
     const text = input.trim();
     if (!text || isSending) return;
     setInput('');
+    if (inputRef.current) inputRef.current.style.height = 'auto';
     await sendMessageStream(convId, text);
   };
 
@@ -466,8 +468,14 @@ export default function ConversationPage() {
           <div className="px-4 py-3 border-t border-border bg-surface shrink-0">
             <div className="flex gap-2">
               <textarea
+                ref={inputRef}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  const el = e.target;
+                  el.style.height = 'auto';
+                  el.style.height = `${Math.min(el.scrollHeight, 150)}px`;
+                }}
                 onKeyDown={handleKeyDown}
                 placeholder="Type a message... (Shift+Enter for new line)"
                 rows={1}
