@@ -1,5 +1,6 @@
-import { useState, type ChangeEvent } from 'react';
-import { useExpertStore } from '../stores/expertStore';
+import { useState, useEffect, type ChangeEvent } from 'react';
+import { useExpertStore, type Expert } from '../stores/expertStore';
+import { api } from '../lib/api';
 import { toast } from '../stores/toastStore';
 
 interface Props {
@@ -13,6 +14,23 @@ export default function ImportExpertModal({ onClose, onImported }: Props) {
   const [fileName, setFileName] = useState('');
   const [strategy, setStrategy] = useState<'skip' | 'rename' | 'overwrite'>('rename');
   const [loading, setLoading] = useState(false);
+  const [existingMatch, setExistingMatch] = useState<Expert | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
+
+  useEffect(() => {
+    if (!fileData?.name) {
+      setExistingMatch(null);
+      return;
+    }
+    setIsChecking(true);
+    api<{ experts: Expert[] }>(`/api/experts?search=${encodeURIComponent(fileData.name)}`)
+      .then(({ experts }) => {
+        const match = experts.find((e) => e.name.toLowerCase() === fileData.name.toLowerCase());
+        setExistingMatch(match || null);
+      })
+      .catch(() => setExistingMatch(null))
+      .finally(() => setIsChecking(false));
+  }, [fileData?.name]);
 
   function handleFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -79,31 +97,83 @@ export default function ImportExpertModal({ onClose, onImported }: Props) {
               </div>
             </div>
 
-            <div className="mb-4">
-              <label className="block text-sm text-text-secondary mb-2">If name already exists:</label>
-              <div className="space-y-2">
-                {[
-                  { value: 'rename' as const, label: 'Rename', desc: 'Import as "Name (imported)"' },
-                  { value: 'overwrite' as const, label: 'Overwrite', desc: 'Replace existing expert' },
-                  { value: 'skip' as const, label: 'Skip', desc: 'Do not import' },
-                ].map((opt) => (
-                  <label key={opt.value} className="flex items-start gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="strategy"
-                      value={opt.value}
-                      checked={strategy === opt.value}
-                      onChange={() => setStrategy(opt.value)}
-                      className="mt-1 accent-primary"
-                    />
-                    <div>
-                      <p className="text-sm text-text-primary">{opt.label}</p>
-                      <p className="text-xs text-text-muted">{opt.desc}</p>
-                    </div>
-                  </label>
-                ))}
+            {isChecking ? (
+              <p className="text-xs text-text-muted mb-4">Checking for conflicts...</p>
+            ) : existingMatch ? (
+              <div className="mb-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                <p className="text-sm text-yellow-500 font-medium mb-2">
+                  An expert named &ldquo;{existingMatch.name}&rdquo; already exists
+                </p>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-text-muted">
+                      <th className="text-left py-1"></th>
+                      <th className="text-left py-1">Existing</th>
+                      <th className="text-left py-1">Importing</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-text-secondary">
+                    <tr>
+                      <td className="py-1 text-text-muted">Domain</td>
+                      <td className="py-1">{existingMatch.domain}</td>
+                      <td className="py-1">{fileData.domain}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1 text-text-muted">Description</td>
+                      <td className="py-1 truncate max-w-[120px]">{existingMatch.description || '-'}</td>
+                      <td className="py-1 truncate max-w-[120px]">{fileData.description || '-'}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1 text-text-muted">Behaviors</td>
+                      <td className="py-1">-</td>
+                      <td className="py-1">{fileData.behaviors?.length || 0}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1 text-text-muted">Categories</td>
+                      <td className="py-1">{existingMatch.category_names ? existingMatch.category_names.split(',').length : 0}</td>
+                      <td className="py-1">{fileData.categories?.length || 0}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1 text-text-muted">Memories</td>
+                      <td className="py-1">-</td>
+                      <td className="py-1">{fileData.memories?.length || 0}</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
-            </div>
+            ) : (
+              <div className="mb-4 p-3 rounded-lg bg-green-500/10 border border-green-500/30">
+                <p className="text-sm text-green-500">No conflicts — will create new expert</p>
+              </div>
+            )}
+
+            {existingMatch && (
+              <div className="mb-4">
+                <label className="block text-sm text-text-secondary mb-2">Conflict resolution:</label>
+                <div className="space-y-2">
+                  {[
+                    { value: 'rename' as const, label: 'Rename', desc: 'Import as "Name (imported)"' },
+                    { value: 'overwrite' as const, label: 'Overwrite', desc: 'Replace existing expert' },
+                    { value: 'skip' as const, label: 'Skip', desc: 'Do not import' },
+                  ].map((opt) => (
+                    <label key={opt.value} className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="strategy"
+                        value={opt.value}
+                        checked={strategy === opt.value}
+                        onChange={() => setStrategy(opt.value)}
+                        className="mt-1 accent-primary"
+                      />
+                      <div>
+                        <p className="text-sm text-text-primary">{opt.label}</p>
+                        <p className="text-xs text-text-muted">{opt.desc}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
 
