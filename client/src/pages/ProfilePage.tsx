@@ -10,6 +10,9 @@ export default function ProfilePage() {
   const navigate = useNavigate();
 
   const [defaultBackendId, setDefaultBackendId] = useState<string>('');
+  const [defaultModel, setDefaultModel] = useState<string>('');
+  const [models, setModels] = useState<string[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
 
@@ -24,8 +27,22 @@ export default function ProfilePage() {
     fetchBackends();
     api<{ settings: any }>('/api/settings').then(({ settings }) => {
       setDefaultBackendId(settings.default_backend_id ? String(settings.default_backend_id) : '');
+      setDefaultModel(settings.default_model || '');
     });
   }, [fetchBackends]);
+
+  useEffect(() => {
+    if (!defaultBackendId) {
+      setModels([]);
+      setDefaultModel('');
+      return;
+    }
+    setModelsLoading(true);
+    api<{ models: string[] }>(`/api/backends/${defaultBackendId}/models`)
+      .then(({ models: m }) => setModels(m ?? []))
+      .catch(() => setModels([]))
+      .finally(() => setModelsLoading(false));
+  }, [defaultBackendId]);
 
   async function handleSaveSettings() {
     setSettingsLoading(true);
@@ -33,7 +50,10 @@ export default function ProfilePage() {
     try {
       await api('/api/settings', {
         method: 'PUT',
-        body: JSON.stringify({ default_backend_id: defaultBackendId ? Number(defaultBackendId) : null }),
+        body: JSON.stringify({
+          default_backend_id: defaultBackendId ? Number(defaultBackendId) : null,
+          default_model: defaultModel || null,
+        }),
       });
       setSettingsSaved(true);
       setTimeout(() => setSettingsSaved(false), 2000);
@@ -132,6 +152,33 @@ export default function ProfilePage() {
               {settingsLoading ? 'Saving...' : 'Save'}
             </button>
           </div>
+          {defaultBackendId && (
+            <div className="mt-3">
+              <label className="block text-sm text-text-muted mb-1">Default Model</label>
+              {modelsLoading ? (
+                <p className="text-xs text-text-muted">Loading models...</p>
+              ) : models.length > 0 ? (
+                <select
+                  value={defaultModel}
+                  onChange={(e) => setDefaultModel(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+                >
+                  <option value="">Auto (backend default)</option>
+                  {models.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={defaultModel}
+                  onChange={(e) => setDefaultModel(e.target.value)}
+                  placeholder="Model name (optional)"
+                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+                />
+              )}
+            </div>
+          )}
           {settingsSaved && (
             <p className="mt-2 text-sm text-green-400">Settings saved.</p>
           )}
