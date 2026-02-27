@@ -104,14 +104,23 @@ export default function ExpertsPage() {
                 </div>
                 {expert.category_names && (
                   <div className="flex flex-wrap gap-1 mt-3">
-                    {expert.category_names.split(',').map((name) => (
-                      <span
-                        key={name}
-                        className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs"
-                      >
-                        {name}
-                      </span>
-                    ))}
+                    {expert.category_names.split(',').map((catName) => {
+                      const cat = allCategories.find((c) => c.name === catName.trim());
+                      return (
+                        <span
+                          key={catName}
+                          onClick={(e) => {
+                            if (cat) {
+                              e.preventDefault();
+                              setCategory(String(cat.id));
+                            }
+                          }}
+                          className={`px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs ${cat ? 'cursor-pointer hover:bg-primary/20' : ''}`}
+                        >
+                          {catName}
+                        </span>
+                      );
+                    })}
                   </div>
                 )}
               </Link>
