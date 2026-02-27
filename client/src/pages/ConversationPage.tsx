@@ -1,11 +1,99 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, memo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { marked } from 'marked';
 import { useDropzone } from 'react-dropzone';
 import { api } from '../lib/api';
-import { useConversationStore } from '../stores/conversationStore';
+import { useConversationStore, type Message } from '../stores/conversationStore';
 import { useExpertStore, type Expert } from '../stores/expertStore';
 import { useBackendStore } from '../stores/backendStore';
+
+// Cache for message heights and parsed HTML
+const heightCache = new Map<number, number>();
+const htmlCache = new Map<string, string>();
+
+function parseMarkdown(content: string): string {
+  const cached = htmlCache.get(content);
+  if (cached) return cached;
+  const html = marked.parse(content || '') as string;
+  htmlCache.set(content, html);
+  return html;
+}
+
+const LazyMessage = memo(function LazyMessage({
+  msg,
+  isStreaming,
+}: {
+  msg: Message;
+  isStreaming: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+  const isStreamingMsg = isStreaming && msg.id < 0 && msg.role === 'assistant';
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || isStreamingMsg) {
+      setIsVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsVisible(entry.isIntersecting);
+        if (!entry.isIntersecting && el.offsetHeight > 0) {
+          heightCache.set(msg.id, el.offsetHeight);
+        }
+      },
+      { rootMargin: '200px 0px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [msg.id, isStreamingMsg]);
+
+  const cachedHeight = heightCache.get(msg.id);
+
+  if (!isVisible && cachedHeight) {
+    return (
+      <div
+        ref={ref}
+        style={{ height: cachedHeight }}
+        className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+      />
+    );
+  }
+
+  return (
+    <div
+      ref={ref}
+      className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+    >
+      <div
+        className={`max-w-[75%] rounded-xl px-4 py-3 ${
+          msg.role === 'user'
+            ? 'bg-primary/20 text-text-primary'
+            : 'bg-surface border border-border text-text-primary'
+        }`}
+      >
+        {msg.role === 'assistant' && msg.expert_name && (
+          <p className="text-xs font-medium text-primary mb-1">{msg.expert_name}</p>
+        )}
+        {isVisible ? (
+          <div
+            className="prose prose-invert prose-sm max-w-none [&>p]:mb-2 [&>p:last-child]:mb-0"
+            dangerouslySetInnerHTML={{ __html: parseMarkdown(msg.content) }}
+          />
+        ) : (
+          <div className="text-sm text-text-muted">...</div>
+        )}
+        {isStreamingMsg && (
+          <span className="inline-block w-2 h-4 bg-primary/70 animate-pulse ml-0.5 align-text-bottom rounded-sm" />
+        )}
+        <p className="text-xs text-text-muted mt-2">
+          {new Date(msg.created_at).toLocaleTimeString()}
+        </p>
+      </div>
+    </div>
+  );
+});
 
 export default function ConversationPage() {
   const { id } = useParams<{ id: string }>();
@@ -227,32 +315,7 @@ export default function ConversationPage() {
               </div>
             )}
             {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-[75%] rounded-xl px-4 py-3 ${
-                    msg.role === 'user'
-                      ? 'bg-primary/20 text-text-primary'
-                      : 'bg-surface border border-border text-text-primary'
-                  }`}
-                >
-                  {msg.role === 'assistant' && msg.expert_name && (
-                    <p className="text-xs font-medium text-primary mb-1">{msg.expert_name}</p>
-                  )}
-                  <div
-                    className="prose prose-invert prose-sm max-w-none [&>p]:mb-2 [&>p:last-child]:mb-0"
-                    dangerouslySetInnerHTML={{ __html: marked.parse(msg.content || '') as string }}
-                  />
-                  {isStreaming && msg.id < 0 && msg.role === 'assistant' && (
-                    <span className="inline-block w-2 h-4 bg-primary/70 animate-pulse ml-0.5 align-text-bottom rounded-sm" />
-                  )}
-                  <p className="text-xs text-text-muted mt-2">
-                    {new Date(msg.created_at).toLocaleTimeString()}
-                  </p>
-                </div>
-              </div>
+              <LazyMessage key={msg.id} msg={msg} isStreaming={isStreaming} />
             ))}
             {isSending && !isStreaming && (
               <div className="flex justify-start">
