@@ -10,6 +10,7 @@ export default function ConversationsPage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const [page, setPage] = useState(0);
+  const [newType, setNewType] = useState('standard');
 
   useEffect(() => {
     setPage(0); // reset page on filter change
@@ -24,7 +25,7 @@ export default function ConversationsPage() {
   }, [search, sort, page, fetchConversations]);
 
   const handleNew = async () => {
-    const conv = await createConversation();
+    const conv = await createConversation(undefined, newType);
     navigate(`/conversations/${conv.id}`);
   };
 
@@ -34,7 +35,17 @@ export default function ConversationsPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-semibold text-text-primary">Conversations</h1>
-          <div className="flex gap-3">
+          <div className="flex gap-3 items-center">
+            <select
+              value={newType}
+              onChange={(e) => setNewType(e.target.value)}
+              className="px-3 py-2 rounded-lg bg-surface border border-border text-text-primary text-sm focus:outline-none focus:border-primary"
+            >
+              <option value="standard">Standard</option>
+              <option value="research">Research</option>
+              <option value="brainstorm">Brainstorm</option>
+              <option value="debug">Debug</option>
+            </select>
             <button
               onClick={handleNew}
               className="px-4 py-2 rounded-lg bg-primary text-white font-medium hover:opacity-90 transition-opacity"

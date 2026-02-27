@@ -445,6 +445,19 @@ export default function ConversationPage() {
             {/* Settings */}
             <div>
               <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-3">Settings</h3>
+              <div className="mb-3">
+                <span className="text-sm text-text-primary block mb-1">Type</span>
+                <select
+                  value={currentConversation.type}
+                  onChange={(e) => updateConversation(convId, { type: e.target.value } as any)}
+                  className="w-full px-2 py-1.5 rounded bg-background border border-border text-text-primary text-sm focus:outline-none focus:border-primary"
+                >
+                  <option value="standard">Standard</option>
+                  <option value="research">Research</option>
+                  <option value="brainstorm">Brainstorm</option>
+                  <option value="debug">Debug</option>
+                </select>
+              </div>
               <label className="flex items-center justify-between mb-3">
                 <span className="text-sm text-text-primary">Debate Mode</span>
                 <input

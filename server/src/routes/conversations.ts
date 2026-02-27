@@ -22,6 +22,12 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
+const TYPE_PROMPTS: Record<string, string> = {
+  research: 'Focus on accuracy, cite sources, and provide well-researched answers. ',
+  brainstorm: 'Be creative and generate multiple ideas. Explore unconventional approaches. ',
+  debug: 'Help debug the issue step by step. Ask for error messages and reproduce steps. ',
+};
+
 const router = Router();
 router.use(authenticate);
 
@@ -195,17 +201,19 @@ router.put('/:id', (req, res) => {
     return;
   }
 
-  const { title, expert_debate_enabled, auto_suggest_experts } = req.body;
+  const { title, type, expert_debate_enabled, auto_suggest_experts } = req.body;
 
   db.prepare(`
     UPDATE conversations SET
       title = COALESCE(?, title),
+      type = COALESCE(?, type),
       expert_debate_enabled = COALESCE(?, expert_debate_enabled),
       auto_suggest_experts = COALESCE(?, auto_suggest_experts),
       updated_at = CURRENT_TIMESTAMP
     WHERE id = ? AND user_id = ?
   `).run(
     title ?? null,
+    type ?? null,
     expert_debate_enabled ?? null,
     auto_suggest_experts ?? null,
     req.params.id,
@@ -469,7 +477,7 @@ router.post('/:id/messages/stream', async (req, res) => {
         .all(req.params.id) as { role: string; content: string }[];
       const docContext = getDocumentContext(req.params.id);
       const messages = [
-        { role: 'system' as const, content: 'You are a helpful AI assistant.' + docContext },
+        { role: 'system' as const, content: getTypePrefix(conversation.type) + 'You are a helpful AI assistant.' + docContext },
         ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
       ];
 
@@ -610,7 +618,7 @@ router.post('/:id/messages', async (req, res) => {
       // No experts — default assistant response
       const docContext = getDocumentContext(req.params.id);
       const messages = [
-        { role: 'system' as const, content: 'You are a helpful AI assistant.' + docContext },
+        { role: 'system' as const, content: getTypePrefix(conversation.type) + 'You are a helpful AI assistant.' + docContext },
         ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
       ];
 
@@ -741,6 +749,10 @@ function getExpertResponseStream(
   const model = expert.conv_model_override || expert.model_override || undefined;
 
   return chatCompletionStream({ messages, model, backend, signal });
+}
+
+function getTypePrefix(type: string): string {
+  return TYPE_PROMPTS[type] || '';
 }
 
 function getDocumentContext(conversationId: string): string {

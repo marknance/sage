@@ -55,7 +55,7 @@ interface ConversationState {
   fetchConversations: (params?: { search?: string; sort?: string; limit?: number; offset?: number }) => Promise<void>;
   fetchOlderMessages: (conversationId: number, beforeId: number) => Promise<void>;
   fetchConversation: (id: number) => Promise<void>;
-  createConversation: (title?: string) => Promise<Conversation>;
+  createConversation: (title?: string, type?: string) => Promise<Conversation>;
   updateConversation: (id: number, data: Partial<Conversation>) => Promise<void>;
   deleteConversation: (id: number) => Promise<void>;
   sendMessage: (id: number, content: string) => Promise<void>;
@@ -126,10 +126,10 @@ export const useConversationStore = create<ConversationState>((set) => ({
     }
   },
 
-  createConversation: async (title) => {
+  createConversation: async (title, type) => {
     const { conversation } = await api<{ conversation: Conversation }>('/api/conversations', {
       method: 'POST',
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ title, type }),
     });
     set((s) => ({ conversations: [conversation, ...s.conversations] }));
     return conversation;
