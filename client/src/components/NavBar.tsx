@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
 import { useThemeStore } from '../stores/themeStore';
@@ -15,12 +15,33 @@ export default function NavBar() {
   const location = useLocation();
   const user = useAuthStore((s) => s.user);
   const { theme, toggle, init } = useThemeStore();
+  const [health, setHealth] = useState<'ok' | 'error' | 'checking'>('checking');
 
   useEffect(() => { init(); }, [init]);
 
+  useEffect(() => {
+    const check = () => {
+      fetch('/api/health')
+        .then((r) => r.ok ? r.json() : Promise.reject())
+        .then((d) => setHealth(d.status === 'ok' ? 'ok' : 'error'))
+        .catch(() => setHealth('error'));
+    };
+    check();
+    const id = setInterval(check, 30000);
+    return () => clearInterval(id);
+  }, []);
+
   return (
     <nav className="h-14 bg-surface border-b border-border flex items-center px-4 shrink-0">
-      <Link to="/" className="text-lg font-semibold text-text-primary mr-8">Sage</Link>
+      <Link to="/" className="text-lg font-semibold text-text-primary mr-8 flex items-center gap-2">
+        Sage
+        <span
+          className={`inline-block w-2 h-2 rounded-full ${
+            health === 'ok' ? 'bg-green-500' : health === 'error' ? 'bg-red-500' : 'bg-gray-400 animate-pulse'
+          }`}
+          title={health === 'ok' ? 'Server connected' : health === 'error' ? 'Server connection lost' : 'Checking server...'}
+        />
+      </Link>
       <div className="flex gap-1">
         {NAV_ITEMS.map((item) => {
           const active = location.pathname.startsWith(item.to);
