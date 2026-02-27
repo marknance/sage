@@ -163,6 +163,12 @@ const LazyMessage = memo(function LazyMessage({
           </p>
           {isReal && !isEditing && (
             <div className="hidden group-hover:flex gap-2">
+              <button
+                onClick={() => navigator.clipboard.writeText(msg.content)}
+                className="text-xs text-text-muted hover:text-primary"
+              >
+                Copy
+              </button>
               {msg.role === 'user' && (
                 <button
                   onClick={() => { setEditContent(msg.content); setIsEditing(true); }}
