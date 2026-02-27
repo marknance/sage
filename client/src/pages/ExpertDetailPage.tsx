@@ -35,6 +35,7 @@ export default function ExpertDetailPage() {
     deleteMemory,
     clearMemories,
     fetchAllCategories,
+    checkExpertUsage,
   } = useExpertStore();
   const { backends, fetchBackends, models, fetchModels } = useBackendStore();
 
@@ -50,6 +51,7 @@ export default function ExpertDetailPage() {
     memory_enabled: 1,
   });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteWarning, setDeleteWarning] = useState<{ conversation_count: number; message_count: number } | null>(null);
   const [memoryType, setMemoryType] = useState('fact');
   const [memoryContent, setMemoryContent] = useState('');
   const [addCategoryId, setAddCategoryId] = useState('');
@@ -179,7 +181,15 @@ export default function ExpertDetailPage() {
                     Edit
                   </button>
                   <button
-                    onClick={() => setShowDeleteConfirm(true)}
+                    onClick={async () => {
+                      try {
+                        const usage = await checkExpertUsage(expertId);
+                        setDeleteWarning(usage.conversation_count > 0 || usage.message_count > 0 ? usage : null);
+                      } catch {
+                        setDeleteWarning(null);
+                      }
+                      setShowDeleteConfirm(true);
+                    }}
                     className="px-3 py-1 rounded-lg border border-destructive text-destructive text-sm hover:bg-destructive/10 transition-colors"
                   >
                     Delete
@@ -191,6 +201,11 @@ export default function ExpertDetailPage() {
 
           {showDeleteConfirm && (
             <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+              {deleteWarning && (
+                <p className="text-sm text-warning mb-2">
+                  This expert is used in {deleteWarning.conversation_count} conversation{deleteWarning.conversation_count !== 1 ? 's' : ''} with {deleteWarning.message_count} message{deleteWarning.message_count !== 1 ? 's' : ''}.
+                </p>
+              )}
               <p className="text-sm text-text-primary mb-2">Delete this expert? This cannot be undone.</p>
               <div className="flex gap-2">
                 <button
@@ -200,7 +215,7 @@ export default function ExpertDetailPage() {
                   Confirm Delete
                 </button>
                 <button
-                  onClick={() => setShowDeleteConfirm(false)}
+                  onClick={() => { setShowDeleteConfirm(false); setDeleteWarning(null); }}
                   className="px-3 py-1 rounded-lg border border-border text-text-secondary text-sm"
                 >
                   Cancel

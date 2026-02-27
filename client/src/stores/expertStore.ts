@@ -54,6 +54,7 @@ interface ExpertState {
 
   fetchExperts: (params?: { search?: string; category?: string; sort?: string }) => Promise<void>;
   fetchExpert: (id: number) => Promise<void>;
+  checkExpertUsage: (id: number) => Promise<{ conversation_count: number; message_count: number }>;
   createExpert: (data: Partial<Expert>) => Promise<Expert>;
   updateExpert: (id: number, data: Partial<Expert>) => Promise<void>;
   deleteExpert: (id: number) => Promise<void>;
@@ -104,6 +105,10 @@ export const useExpertStore = create<ExpertState>((set, get) => ({
       set({ isLoading: false });
       toast.error(err.message || 'Failed to load expert');
     }
+  },
+
+  checkExpertUsage: async (id) => {
+    return api<{ conversation_count: number; message_count: number }>(`/api/experts/${id}/usage`);
   },
 
   createExpert: async (data) => {

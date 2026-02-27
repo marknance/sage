@@ -126,6 +126,24 @@ router.put('/:id', (req, res) => {
   res.json({ expert });
 });
 
+// GET /:id/usage — check expert usage across conversations
+router.get('/:id/usage', (req, res) => {
+  const existing = db.prepare('SELECT id FROM experts WHERE id = ? AND user_id = ?').get(req.params.id, req.user!.id);
+  if (!existing) {
+    res.status(404).json({ error: 'Expert not found' });
+    return;
+  }
+
+  const conversationCount = db.prepare(
+    'SELECT COUNT(DISTINCT conversation_id) as count FROM conversation_experts WHERE expert_id = ?'
+  ).get(req.params.id) as { count: number };
+  const messageCount = db.prepare(
+    'SELECT COUNT(*) as count FROM messages WHERE expert_id = ?'
+  ).get(req.params.id) as { count: number };
+
+  res.json({ conversation_count: conversationCount.count, message_count: messageCount.count });
+});
+
 // DELETE /:id — delete expert
 router.delete('/:id', (req, res) => {
   const result = db.prepare('DELETE FROM experts WHERE id = ? AND user_id = ?').run(req.params.id, req.user!.id);

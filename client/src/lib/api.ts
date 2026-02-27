@@ -1,7 +1,9 @@
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  data?: Record<string, any>;
+  constructor(public status: number, message: string, data?: Record<string, any>) {
     super(message);
     this.name = 'ApiError';
+    this.data = data;
   }
 }
 
@@ -17,7 +19,7 @@ export async function api<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new ApiError(res.status, body.error || res.statusText);
+    throw new ApiError(res.status, body.error || res.statusText, body);
   }
 
   return res.json();
