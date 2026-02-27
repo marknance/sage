@@ -7,6 +7,45 @@ import { useConversationStore, type Message } from '../stores/conversationStore'
 import { useExpertStore, type Expert } from '../stores/expertStore';
 import { useBackendStore } from '../stores/backendStore';
 import { useThemeStore } from '../stores/themeStore';
+import hljs from 'highlight.js/lib/core';
+import javascript from 'highlight.js/lib/languages/javascript';
+import typescript from 'highlight.js/lib/languages/typescript';
+import python from 'highlight.js/lib/languages/python';
+import json from 'highlight.js/lib/languages/json';
+import xml from 'highlight.js/lib/languages/xml';
+import css from 'highlight.js/lib/languages/css';
+import sql from 'highlight.js/lib/languages/sql';
+import bash from 'highlight.js/lib/languages/bash';
+import markdown from 'highlight.js/lib/languages/markdown';
+import 'highlight.js/styles/github-dark.css';
+
+hljs.registerLanguage('javascript', javascript);
+hljs.registerLanguage('typescript', typescript);
+hljs.registerLanguage('python', python);
+hljs.registerLanguage('json', json);
+hljs.registerLanguage('xml', xml);
+hljs.registerLanguage('html', xml);
+hljs.registerLanguage('css', css);
+hljs.registerLanguage('sql', sql);
+hljs.registerLanguage('bash', bash);
+hljs.registerLanguage('markdown', markdown);
+
+function getLanguageFromExt(filename: string): string | null {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  const map: Record<string, string> = {
+    js: 'javascript', jsx: 'javascript', mjs: 'javascript',
+    ts: 'typescript', tsx: 'typescript',
+    py: 'python',
+    json: 'json',
+    xml: 'xml', html: 'html', htm: 'html', svg: 'xml',
+    css: 'css', scss: 'css',
+    sql: 'sql',
+    sh: 'bash', bash: 'bash', zsh: 'bash',
+    md: 'markdown',
+    log: 'bash',
+  };
+  return ext ? (map[ext] || null) : null;
+}
 
 // Cache for message heights and parsed HTML
 const heightCache = new Map<number, number>();
@@ -630,7 +669,23 @@ export default function ConversationPage() {
               <h3 className="text-lg font-medium text-text-primary truncate">{previewDoc.filename}</h3>
               <button onClick={() => setPreviewDoc(null)} className="text-text-muted hover:text-text-primary text-sm">Close</button>
             </div>
-            <pre className="flex-1 overflow-auto text-sm text-text-secondary bg-background rounded-lg p-4 whitespace-pre-wrap">{previewDoc.text}</pre>
+            {previewDoc.filename.endsWith('.md') ? (
+              <div
+                className="flex-1 overflow-auto text-sm text-text-secondary bg-background rounded-lg p-4 prose prose-invert max-w-none"
+                dangerouslySetInnerHTML={{ __html: marked.parse(previewDoc.text || '') as string }}
+              />
+            ) : getLanguageFromExt(previewDoc.filename) && getLanguageFromExt(previewDoc.filename) !== 'markdown' ? (
+              <pre className="flex-1 overflow-auto text-sm bg-background rounded-lg p-4">
+                <code
+                  className={`hljs language-${getLanguageFromExt(previewDoc.filename)}`}
+                  dangerouslySetInnerHTML={{
+                    __html: hljs.highlight(previewDoc.text || '', { language: getLanguageFromExt(previewDoc.filename)! }).value,
+                  }}
+                />
+              </pre>
+            ) : (
+              <pre className="flex-1 overflow-auto text-sm text-text-secondary bg-background rounded-lg p-4 whitespace-pre-wrap">{previewDoc.text}</pre>
+            )}
           </div>
         </div>
       )}
