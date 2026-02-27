@@ -36,7 +36,7 @@ export default function ExpertDetailPage() {
     clearMemories,
     fetchAllCategories,
   } = useExpertStore();
-  const { backends, fetchBackends } = useBackendStore();
+  const { backends, fetchBackends, models, fetchModels } = useBackendStore();
 
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -64,6 +64,12 @@ export default function ExpertDetailPage() {
       fetchBackends();
     }
   }, [id, expertId, fetchExpert, fetchMemories, fetchAllCategories, fetchBackends]);
+
+  useEffect(() => {
+    if (editForm.backend_id) {
+      fetchModels(Number(editForm.backend_id));
+    }
+  }, [editForm.backend_id, fetchModels]);
 
   useEffect(() => {
     if (currentExpert) {
@@ -259,7 +265,7 @@ export default function ExpertDetailPage() {
                 <label className="block text-sm text-text-secondary mb-1">AI Backend</label>
                 <select
                   value={editForm.backend_id}
-                  onChange={(e) => setEditForm((f) => ({ ...f, backend_id: e.target.value }))}
+                  onChange={(e) => setEditForm((f) => ({ ...f, backend_id: e.target.value, model_override: '' }))}
                   className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
                 >
                   <option value="">Default (system fallback)</option>
@@ -272,13 +278,26 @@ export default function ExpertDetailPage() {
               </div>
               <div>
                 <label className="block text-sm text-text-secondary mb-1">Model Override</label>
-                <input
-                  type="text"
-                  value={editForm.model_override}
-                  onChange={(e) => setEditForm((f) => ({ ...f, model_override: e.target.value }))}
-                  placeholder="Leave blank for default"
-                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
-                />
+                {editForm.backend_id && models.length > 0 ? (
+                  <select
+                    value={editForm.model_override}
+                    onChange={(e) => setEditForm((f) => ({ ...f, model_override: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+                  >
+                    <option value="">Default model</option>
+                    {models.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={editForm.model_override}
+                    onChange={(e) => setEditForm((f) => ({ ...f, model_override: e.target.value }))}
+                    placeholder="Leave blank for default"
+                    className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+                  />
+                )}
               </div>
               <label className="flex items-center justify-between cursor-pointer">
                 <span className="text-text-primary">Memory Enabled</span>

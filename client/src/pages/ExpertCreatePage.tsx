@@ -18,7 +18,7 @@ const BEHAVIOR_KEYS = Object.keys(BEHAVIOR_LABELS);
 export default function ExpertCreatePage() {
   const navigate = useNavigate();
   const { createExpert, updateBehaviors } = useExpertStore();
-  const { backends, fetchBackends } = useBackendStore();
+  const { backends, fetchBackends, models, fetchModels } = useBackendStore();
 
   const [name, setName] = useState('');
   const [backend_id, setBackendId] = useState<string>('');
@@ -37,6 +37,12 @@ export default function ExpertCreatePage() {
   useEffect(() => {
     fetchBackends();
   }, [fetchBackends]);
+
+  useEffect(() => {
+    if (backend_id) {
+      fetchModels(Number(backend_id));
+    }
+  }, [backend_id, fetchModels]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -196,7 +202,7 @@ export default function ExpertCreatePage() {
                 <label className="block text-sm text-text-secondary mb-1">AI Backend</label>
                 <select
                   value={backend_id}
-                  onChange={(e) => setBackendId(e.target.value)}
+                  onChange={(e) => { setBackendId(e.target.value); setModelOverride(''); }}
                   className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
                 >
                   <option value="">Default (system fallback)</option>
@@ -209,13 +215,26 @@ export default function ExpertCreatePage() {
               </div>
               <div>
                 <label className="block text-sm text-text-secondary mb-1">Model Override</label>
-                <input
-                  type="text"
-                  value={model_override}
-                  onChange={(e) => setModelOverride(e.target.value)}
-                  placeholder="Leave blank for default"
-                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
-                />
+                {backend_id && models.length > 0 ? (
+                  <select
+                    value={model_override}
+                    onChange={(e) => setModelOverride(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+                  >
+                    <option value="">Default model</option>
+                    {models.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={model_override}
+                    onChange={(e) => setModelOverride(e.target.value)}
+                    placeholder="Leave blank for default"
+                    className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+                  />
+                )}
               </div>
               <label className="flex items-center justify-between cursor-pointer">
                 <span className="text-text-primary">Memory Enabled</span>

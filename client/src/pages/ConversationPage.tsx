@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { marked } from 'marked';
 import { useDropzone } from 'react-dropzone';
+import { api } from '../lib/api';
 import { useConversationStore } from '../stores/conversationStore';
 import { useExpertStore, type Expert } from '../stores/expertStore';
 import { useBackendStore } from '../stores/backendStore';
@@ -37,13 +38,33 @@ export default function ConversationPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
+  const [modelsMap, setModelsMap] = useState<Record<string, string[]>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const fetchModelsForBackend = useCallback(async (backendId: number) => {
+    const key = String(backendId);
+    if (modelsMap[key]) return;
+    try {
+      const { models } = await api<{ models: string[] }>(`/api/backends/${backendId}/models`);
+      setModelsMap((prev) => ({ ...prev, [key]: models ?? [] }));
+    } catch {
+      setModelsMap((prev) => ({ ...prev, [key]: [] }));
+    }
+  }, [modelsMap]);
 
   useEffect(() => {
     fetchConversation(convId);
     fetchExperts();
     fetchBackends();
   }, [convId, fetchConversation, fetchExperts, fetchBackends]);
+
+  useEffect(() => {
+    for (const expert of assignedExperts) {
+      if (expert.backend_override_id) {
+        fetchModelsForBackend(expert.backend_override_id);
+      }
+    }
+  }, [assignedExperts, fetchModelsForBackend]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -283,6 +304,7 @@ export default function ConversationPage() {
                         value={expert.backend_override_id ?? ''}
                         onChange={(e) => updateExpertOverride(convId, expert.id, {
                           backend_override_id: e.target.value ? Number(e.target.value) : null,
+                          model_override: null,
                         })}
                         className="w-full mt-1 px-2 py-1 rounded bg-surface border border-border text-text-secondary text-xs focus:outline-none focus:border-primary"
                       >
@@ -291,6 +313,30 @@ export default function ConversationPage() {
                           <option key={b.id} value={b.id}>{b.name} ({b.type})</option>
                         ))}
                       </select>
+                      {expert.backend_override_id && (modelsMap[String(expert.backend_override_id)]?.length ?? 0) > 0 ? (
+                        <select
+                          value={expert.conv_model_override ?? ''}
+                          onChange={(e) => updateExpertOverride(convId, expert.id, {
+                            model_override: e.target.value || null,
+                          })}
+                          className="w-full mt-1 px-2 py-1 rounded bg-surface border border-border text-text-secondary text-xs focus:outline-none focus:border-primary"
+                        >
+                          <option value="">Default model</option>
+                          {modelsMap[String(expert.backend_override_id)]!.map((m) => (
+                            <option key={m} value={m}>{m}</option>
+                          ))}
+                        </select>
+                      ) : expert.backend_override_id ? (
+                        <input
+                          type="text"
+                          value={expert.conv_model_override ?? ''}
+                          onChange={(e) => updateExpertOverride(convId, expert.id, {
+                            model_override: e.target.value || null,
+                          })}
+                          placeholder="Model override"
+                          className="w-full mt-1 px-2 py-1 rounded bg-surface border border-border text-text-secondary text-xs focus:outline-none focus:border-primary"
+                        />
+                      ) : null}
                     </div>
                   ))}
                 </div>
