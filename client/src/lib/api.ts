@@ -18,6 +18,9 @@ export async function api<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (!res.ok) {
+    if (res.status === 429) {
+      throw new ApiError(429, 'Too many requests. Please wait a moment and try again.');
+    }
     const body = await res.json().catch(() => ({ error: res.statusText }));
     throw new ApiError(res.status, body.error || res.statusText, body);
   }
@@ -38,6 +41,9 @@ export async function streamApi(
   });
 
   if (!res.ok) {
+    if (res.status === 429) {
+      throw new ApiError(429, 'Too many requests. Please wait a moment and try again.');
+    }
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new ApiError(res.status, err.error || res.statusText);
   }
