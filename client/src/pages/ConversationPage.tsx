@@ -231,6 +231,7 @@ export default function ConversationPage() {
   const [titleDraft, setTitleDraft] = useState('');
   const [modelsMap, setModelsMap] = useState<Record<string, string[]>>({});
   const [previewDoc, setPreviewDoc] = useState<{ filename: string; text: string } | null>(null);
+  const [messageSearch, setMessageSearch] = useState('');
   const confirm = useConfirmStore((s) => s.confirm);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -330,6 +331,10 @@ export default function ConversationPage() {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop });
 
   // Available experts (not yet assigned)
+  const filteredMessages = messageSearch
+    ? messages.filter((m) => m.content.toLowerCase().includes(messageSearch.toLowerCase()))
+    : messages;
+
   const availableExperts = allExperts.filter(
     (e) => !assignedExperts.some((a) => a.id === e.id)
   );
@@ -374,6 +379,13 @@ export default function ConversationPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <input
+            type="text"
+            placeholder="Search messages..."
+            value={messageSearch}
+            onChange={(e) => setMessageSearch(e.target.value)}
+            className="px-3 py-1.5 rounded-lg border border-border text-text-primary text-sm bg-surface focus:outline-none focus:border-primary w-40"
+          />
           <select
             defaultValue=""
             onChange={(e) => {
@@ -456,7 +468,12 @@ export default function ConversationPage() {
                 <p>No messages yet. Start the conversation!</p>
               </div>
             )}
-            {messages.map((msg) => (
+            {messageSearch && (
+              <p className="text-xs text-text-muted text-center py-1">
+                {filteredMessages.length} of {messages.length} messages match
+              </p>
+            )}
+            {filteredMessages.map((msg) => (
               <LazyMessage
                 key={msg.id}
                 msg={msg}
