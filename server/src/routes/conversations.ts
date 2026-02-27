@@ -52,8 +52,17 @@ router.get('/', (req, res) => {
     query += ` ORDER BY c.updated_at DESC`;
   }
 
-  const conversations = db.prepare(query).all(...params);
-  res.json({ conversations });
+  // Count total before pagination
+  const countQuery = query.replace(/SELECT c\.\*[\s\S]*?FROM conversations c/, 'SELECT COUNT(*) as total FROM conversations c');
+  const countResult = db.prepare(countQuery.replace(/ORDER BY.*$/, '')).get(...params) as { total: number };
+  const total = countResult.total;
+
+  const limit = Math.min(Math.max(Number(req.query.limit) || 24, 1), 100);
+  const offset = Math.max(Number(req.query.offset) || 0, 0);
+  query += ` LIMIT ? OFFSET ?`;
+
+  const conversations = db.prepare(query).all(...params, limit, offset);
+  res.json({ conversations, total, limit, offset });
 });
 
 // POST / — create conversation
@@ -86,18 +95,33 @@ router.get('/:id', (req, res) => {
     WHERE ce.conversation_id = ?
   `).all(req.params.id);
 
-  const messages = db.prepare(`
+  // Cursor-based message pagination: get newest `limit` messages, optionally before a message ID
+  const msgLimit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+  const before = req.query.before ? Number(req.query.before) : null;
+
+  let msgQuery = `
     SELECT m.*, e.name as expert_name
     FROM messages m
     LEFT JOIN experts e ON e.id = m.expert_id
     WHERE m.conversation_id = ?
-    ORDER BY m.created_at ASC
-  `).all(req.params.id);
+  `;
+  const msgParams: any[] = [req.params.id];
+  if (before) {
+    msgQuery += ` AND m.id < ?`;
+    msgParams.push(before);
+  }
+  msgQuery += ` ORDER BY m.id DESC LIMIT ?`;
+  msgParams.push(msgLimit + 1); // fetch one extra to detect hasMore
+
+  const rawMessages = db.prepare(msgQuery).all(...msgParams) as any[];
+  const hasMore = rawMessages.length > msgLimit;
+  if (hasMore) rawMessages.pop();
+  const messages = rawMessages.reverse(); // restore ASC order
 
   const documents = db.prepare('SELECT * FROM documents WHERE conversation_id = ? ORDER BY created_at DESC')
     .all(req.params.id);
 
-  res.json({ conversation, experts, messages, documents });
+  res.json({ conversation, experts, messages, documents, hasMore });
 });
 
 // PUT /:id — update conversation

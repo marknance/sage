@@ -38,8 +38,12 @@ export interface Document {
 
 interface ConversationState {
   conversations: Conversation[];
+  total: number;
+  limit: number;
+  offset: number;
   currentConversation: Conversation | null;
   messages: Message[];
+  hasMoreMessages: boolean;
   experts: (Expert & { assignment_id: number; backend_override_id?: number | null; conv_model_override?: string | null })[];
   documents: Document[];
   suggestedExperts: Expert[];
@@ -47,7 +51,8 @@ interface ConversationState {
   isSending: boolean;
   isStreaming: boolean;
 
-  fetchConversations: (params?: { search?: string; sort?: string }) => Promise<void>;
+  fetchConversations: (params?: { search?: string; sort?: string; limit?: number; offset?: number }) => Promise<void>;
+  fetchOlderMessages: (conversationId: number, beforeId: number) => Promise<void>;
   fetchConversation: (id: number) => Promise<void>;
   createConversation: (title?: string) => Promise<Conversation>;
   updateConversation: (id: number, data: Partial<Conversation>) => Promise<void>;
@@ -63,8 +68,12 @@ interface ConversationState {
 
 export const useConversationStore = create<ConversationState>((set) => ({
   conversations: [],
+  total: 0,
+  limit: 24,
+  offset: 0,
   currentConversation: null,
   messages: [],
+  hasMoreMessages: false,
   experts: [],
   documents: [],
   suggestedExperts: [],
@@ -78,9 +87,11 @@ export const useConversationStore = create<ConversationState>((set) => ({
       const query = new URLSearchParams();
       if (params?.search) query.set('search', params.search);
       if (params?.sort) query.set('sort', params.sort);
+      if (params?.limit) query.set('limit', String(params.limit));
+      if (params?.offset) query.set('offset', String(params.offset));
       const qs = query.toString();
-      const { conversations } = await api<{ conversations: Conversation[] }>(`/api/conversations${qs ? `?${qs}` : ''}`);
-      set({ conversations, isLoading: false });
+      const data = await api<{ conversations: Conversation[]; total: number; limit: number; offset: number }>(`/api/conversations${qs ? `?${qs}` : ''}`);
+      set({ conversations: data.conversations, total: data.total, limit: data.limit, offset: data.offset, isLoading: false });
     } catch (err: any) {
       set({ isLoading: false });
       toast.error(err.message || 'Failed to load conversations');
@@ -95,11 +106,13 @@ export const useConversationStore = create<ConversationState>((set) => ({
         experts: (Expert & { assignment_id: number; backend_override_id?: number | null; conv_model_override?: string | null })[];
         messages: Message[];
         documents: Document[];
+        hasMore: boolean;
       }>(`/api/conversations/${id}`);
       set({
         currentConversation: data.conversation,
         experts: data.experts,
         messages: data.messages,
+        hasMoreMessages: data.hasMore,
         documents: data.documents,
         suggestedExperts: [],
         isLoading: false,
@@ -134,6 +147,22 @@ export const useConversationStore = create<ConversationState>((set) => ({
       currentConversation: null,
     }));
     toast.success('Conversation deleted');
+  },
+
+  fetchOlderMessages: async (conversationId, beforeId) => {
+    try {
+      const data = await api<{
+        conversation: { id: number };
+        messages: Message[];
+        hasMore: boolean;
+      }>(`/api/conversations/${conversationId}?before=${beforeId}&limit=50`);
+      set((s) => ({
+        messages: [...data.messages, ...s.messages],
+        hasMoreMessages: data.hasMore,
+      }));
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to load older messages');
+    }
   },
 
   sendMessage: async (id, content) => {

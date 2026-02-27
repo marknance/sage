@@ -15,6 +15,7 @@ export default function ConversationPage() {
   const {
     currentConversation,
     messages,
+    hasMoreMessages,
     experts: assignedExperts,
     documents,
     suggestedExperts,
@@ -22,6 +23,7 @@ export default function ConversationPage() {
     isSending,
     isStreaming,
     fetchConversation,
+    fetchOlderMessages,
     updateConversation,
     deleteConversation,
     sendMessageStream,
@@ -201,6 +203,24 @@ export default function ConversationPage() {
 
           {/* Messages */}
           <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+            {hasMoreMessages && messages.length > 0 && (
+              <div className="text-center">
+                <button
+                  onClick={async () => {
+                    const el = messagesContainerRef.current;
+                    const prevHeight = el?.scrollHeight || 0;
+                    await fetchOlderMessages(convId, messages[0].id);
+                    // Preserve scroll position after prepending
+                    requestAnimationFrame(() => {
+                      if (el) el.scrollTop = el.scrollHeight - prevHeight;
+                    });
+                  }}
+                  className="px-4 py-1.5 rounded-lg border border-border text-text-secondary text-sm hover:text-text-primary transition-colors"
+                >
+                  Load earlier messages
+                </button>
+              </div>
+            )}
             {messages.length === 0 && (
               <div className="text-center py-16 text-text-muted">
                 <p>No messages yet. Start the conversation!</p>

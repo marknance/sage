@@ -3,19 +3,25 @@ import { Link, useNavigate } from 'react-router';
 import { useConversationStore } from '../stores/conversationStore';
 
 export default function ConversationsPage() {
-  const { conversations, isLoading, fetchConversations, createConversation } = useConversationStore();
+  const { conversations, total, limit, offset, isLoading, fetchConversations, createConversation } = useConversationStore();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('recent');
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  const [page, setPage] = useState(0);
+
+  useEffect(() => {
+    setPage(0); // reset page on filter change
+  }, [search, sort]);
+
   useEffect(() => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      fetchConversations({ search: search || undefined, sort });
+      fetchConversations({ search: search || undefined, sort, offset: page * 24 });
     }, search ? 300 : 0);
     return () => clearTimeout(debounceRef.current);
-  }, [search, sort, fetchConversations]);
+  }, [search, sort, page, fetchConversations]);
 
   const handleNew = async () => {
     const conv = await createConversation();
@@ -106,6 +112,29 @@ export default function ConversationsPage() {
                 </div>
               </Link>
             ))}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {total > limit && (
+          <div className="flex items-center justify-center gap-4 mt-6">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="px-4 py-2 rounded-lg border border-border text-text-secondary hover:text-text-primary disabled:opacity-50 transition-colors"
+            >
+              Previous
+            </button>
+            <span className="text-sm text-text-secondary">
+              Page {page + 1} of {Math.ceil(total / limit)}
+            </span>
+            <button
+              onClick={() => setPage((p) => p + 1)}
+              disabled={offset + limit >= total}
+              className="px-4 py-2 rounded-lg border border-border text-text-secondary hover:text-text-primary disabled:opacity-50 transition-colors"
+            >
+              Next
+            </button>
           </div>
         )}
       </div>
