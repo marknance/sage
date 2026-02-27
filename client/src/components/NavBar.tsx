@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
+import { useThemeStore } from '../stores/themeStore';
 
 const NAV_ITEMS = [
   { to: '/conversations', label: 'Conversations' },
@@ -11,6 +13,9 @@ const NAV_ITEMS = [
 export default function NavBar() {
   const location = useLocation();
   const user = useAuthStore((s) => s.user);
+  const { theme, toggle, init } = useThemeStore();
+
+  useEffect(() => { init(); }, [init]);
 
   return (
     <nav className="h-14 bg-surface border-b border-border flex items-center px-4 shrink-0">
@@ -44,6 +49,15 @@ export default function NavBar() {
             Admin
           </Link>
         )}
+      </div>
+      <div className="ml-auto">
+        <button
+          onClick={toggle}
+          className="px-2 py-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-background transition-colors text-sm"
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {theme === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19'}
+        </button>
       </div>
     </nav>
   );

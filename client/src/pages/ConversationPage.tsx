@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { useConversationStore, type Message } from '../stores/conversationStore';
 import { useExpertStore, type Expert } from '../stores/expertStore';
 import { useBackendStore } from '../stores/backendStore';
+import { useThemeStore } from '../stores/themeStore';
 
 // Cache for message heights and parsed HTML
 const heightCache = new Map<number, number>();
@@ -22,9 +23,11 @@ function parseMarkdown(content: string): string {
 const LazyMessage = memo(function LazyMessage({
   msg,
   isStreaming,
+  isDark,
 }: {
   msg: Message;
   isStreaming: boolean;
+  isDark: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -78,7 +81,7 @@ const LazyMessage = memo(function LazyMessage({
         )}
         {isVisible ? (
           <div
-            className="prose prose-invert prose-sm max-w-none [&>p]:mb-2 [&>p:last-child]:mb-0"
+            className={`prose prose-sm max-w-none [&>p]:mb-2 [&>p:last-child]:mb-0 ${isDark ? 'prose-invert' : ''}`}
             dangerouslySetInnerHTML={{ __html: parseMarkdown(msg.content) }}
           />
         ) : (
@@ -124,6 +127,7 @@ export default function ConversationPage() {
 
   const { experts: allExperts, fetchExperts } = useExpertStore();
   const { backends, fetchBackends } = useBackendStore();
+  const isDark = useThemeStore((s) => s.theme) === 'dark';
 
   const [input, setInput] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -312,7 +316,7 @@ export default function ConversationPage() {
               </div>
             )}
             {messages.map((msg) => (
-              <LazyMessage key={msg.id} msg={msg} isStreaming={isStreaming} />
+              <LazyMessage key={msg.id} msg={msg} isStreaming={isStreaming} isDark={isDark} />
             ))}
             {isSending && !isStreaming && (
               <div className="flex justify-start">
