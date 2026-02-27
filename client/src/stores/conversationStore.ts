@@ -52,7 +52,7 @@ interface ConversationState {
   isSending: boolean;
   isStreaming: boolean;
 
-  fetchConversations: (params?: { search?: string; sort?: string; limit?: number; offset?: number }) => Promise<void>;
+  fetchConversations: (params?: { search?: string; sort?: string; type?: string; limit?: number; offset?: number }) => Promise<void>;
   fetchOlderMessages: (conversationId: number, beforeId: number) => Promise<void>;
   fetchConversation: (id: number) => Promise<void>;
   createConversation: (title?: string, type?: string) => Promise<Conversation>;
@@ -90,6 +90,7 @@ export const useConversationStore = create<ConversationState>((set) => ({
       const query = new URLSearchParams();
       if (params?.search) query.set('search', params.search);
       if (params?.sort) query.set('sort', params.sort);
+      if (params?.type) query.set('type', params.type);
       if (params?.limit) query.set('limit', String(params.limit));
       if (params?.offset) query.set('offset', String(params.offset));
       const qs = query.toString();

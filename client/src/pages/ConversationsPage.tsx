@@ -11,18 +11,19 @@ export default function ConversationsPage() {
 
   const [page, setPage] = useState(0);
   const [newType, setNewType] = useState('standard');
+  const [filterType, setFilterType] = useState('');
 
   useEffect(() => {
     setPage(0); // reset page on filter change
-  }, [search, sort]);
+  }, [search, sort, filterType]);
 
   useEffect(() => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      fetchConversations({ search: search || undefined, sort, offset: page * 24 });
+      fetchConversations({ search: search || undefined, sort, type: filterType || undefined, offset: page * 24 });
     }, search ? 300 : 0);
     return () => clearTimeout(debounceRef.current);
-  }, [search, sort, page, fetchConversations]);
+  }, [search, sort, filterType, page, fetchConversations]);
 
   const handleNew = async () => {
     const conv = await createConversation(undefined, newType);
@@ -72,6 +73,17 @@ export default function ConversationsPage() {
             <option value="recent">Recently Updated</option>
             <option value="title">Title</option>
             <option value="created">Newest</option>
+          </select>
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="px-3 py-2 rounded-lg bg-surface border border-border text-text-primary focus:outline-none focus:border-primary"
+          >
+            <option value="">All Types</option>
+            <option value="standard">Standard</option>
+            <option value="research">Research</option>
+            <option value="brainstorm">Brainstorm</option>
+            <option value="debug">Debug</option>
           </select>
         </div>
 

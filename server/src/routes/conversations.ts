@@ -34,7 +34,7 @@ router.use(authenticate);
 // GET / — list conversations
 router.get('/', (req, res) => {
   const userId = req.user!.id;
-  const { search, sort } = req.query;
+  const { search, sort, type } = req.query;
 
   let query = `
     SELECT c.*,
@@ -49,6 +49,11 @@ router.get('/', (req, res) => {
     const term = `%${search}%`;
     query += ` AND (c.title LIKE ? OR EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.content LIKE ?))`;
     params.push(term, term);
+  }
+
+  if (type && typeof type === 'string') {
+    query += ' AND c.type = ?';
+    params.push(type);
   }
 
   if (sort === 'title') {
