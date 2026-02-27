@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { api } from '../lib/api';
 import { useConversationStore } from '../stores/conversationStore';
+import { useConfirmStore } from '../stores/confirmStore';
 
 export default function ConversationsPage() {
   const { conversations, total, limit, offset, isLoading, fetchConversations, createConversation, togglePin, bulkDeleteConversations } = useConversationStore();
@@ -22,6 +23,7 @@ export default function ConversationsPage() {
   const [pinnedOnly, setPinnedOnly] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const confirm = useConfirmStore((s) => s.confirm);
 
   useEffect(() => {
     setPage(0); // reset page on filter change
@@ -53,7 +55,8 @@ export default function ConversationsPage() {
                 <button
                   onClick={async () => {
                     if (selected.size === 0) return;
-                    if (!confirm(`Delete ${selected.size} conversation${selected.size !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+                    const ok = await confirm({ title: 'Delete Conversations', message: `Delete ${selected.size} conversation${selected.size !== 1 ? 's' : ''}? This cannot be undone.` });
+                    if (!ok) return;
                     await bulkDeleteConversations(Array.from(selected));
                     setSelected(new Set());
                     setSelectMode(false);
@@ -258,6 +261,7 @@ export default function ConversationsPage() {
           </div>
         )}
       </div>
+
     </div>
   );
 }

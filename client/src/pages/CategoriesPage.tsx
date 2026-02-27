@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useExpertStore } from '../stores/expertStore';
 import { toast } from '../stores/toastStore';
+import { useConfirmStore } from '../stores/confirmStore';
 
 export default function CategoriesPage() {
   const { allCategories, fetchAllCategories, createCategory, deleteCategory, renameCategory } = useExpertStore();
   const [newName, setNewName] = useState('');
+  const confirm = useConfirmStore((s) => s.confirm);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
 
@@ -38,7 +40,7 @@ export default function CategoriesPage() {
     const msg = expertCount > 0
       ? `This category has ${expertCount} expert(s) assigned. Delete anyway?`
       : 'Delete this category?';
-    if (!confirm(msg)) return;
+    if (!await confirm({ title: 'Delete Category', message: msg })) return;
     try {
       await deleteCategory(id);
     } catch (err: any) {

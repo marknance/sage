@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAdminStore } from '../stores/adminStore';
 import { toast } from '../stores/toastStore';
+import { useConfirmStore } from '../stores/confirmStore';
 
 type Tab = 'conversations' | 'experts';
 
@@ -11,6 +12,7 @@ export default function AdminContentPage() {
     fetchAdminConversations, fetchAdminExperts,
     deleteAdminConversation, deleteAdminExpert,
   } = useAdminStore();
+  const confirm = useConfirmStore((s) => s.confirm);
   const [tab, setTab] = useState<Tab>('conversations');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
@@ -97,7 +99,7 @@ export default function AdminContentPage() {
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={async () => {
-                          if (!confirm(`Delete conversation "${c.title}"?`)) return;
+                          if (!await confirm({ title: 'Delete Conversation', message: `Delete conversation "${c.title}"?` })) return;
                           try {
                             await deleteAdminConversation(c.id);
                           } catch (err: any) {
@@ -123,7 +125,7 @@ export default function AdminContentPage() {
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={async () => {
-                          if (!confirm(`Delete expert "${e.name}"?`)) return;
+                          if (!await confirm({ title: 'Delete Expert', message: `Delete expert "${e.name}"?` })) return;
                           try {
                             await deleteAdminExpert(e.id);
                           } catch (err: any) {

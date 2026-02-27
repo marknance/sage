@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router';
 import { useBackendStore } from '../stores/backendStore';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { toast } from '../stores/toastStore';
+import { useConfirmStore } from '../stores/confirmStore';
 
 const TYPE_OPTIONS = ['ollama', 'openai', 'anthropic', 'lmstudio', 'custom'];
 
@@ -19,6 +20,7 @@ export default function BackendFormPage() {
   const isEdit = !!id;
   const navigate = useNavigate();
   const { currentBackend, fetchBackend, createBackend, updateBackend, deleteBackend, testBackend, testResult, clearTestResult } = useBackendStore();
+  const confirm = useConfirmStore((s) => s.confirm);
   const [deleting, setDeleting] = useState(false);
 
   const [name, setName] = useState('');
@@ -282,7 +284,7 @@ export default function BackendFormPage() {
               type="button"
               disabled={deleting}
               onClick={async () => {
-                if (!confirm('Delete this backend? Experts using it will fall back to the default.')) return;
+                if (!await confirm({ title: 'Delete Backend', message: 'Delete this backend? Experts using it will fall back to the default.' })) return;
                 setDeleting(true);
                 try {
                   await deleteBackend(Number(id));

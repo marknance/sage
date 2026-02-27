@@ -8,6 +8,7 @@ import { useExpertStore, type Expert } from '../stores/expertStore';
 import { useBackendStore } from '../stores/backendStore';
 import { useThemeStore } from '../stores/themeStore';
 import { toast } from '../stores/toastStore';
+import { useConfirmStore } from '../stores/confirmStore';
 import hljs from 'highlight.js/lib/core';
 import javascript from 'highlight.js/lib/languages/javascript';
 import typescript from 'highlight.js/lib/languages/typescript';
@@ -230,6 +231,7 @@ export default function ConversationPage() {
   const [titleDraft, setTitleDraft] = useState('');
   const [modelsMap, setModelsMap] = useState<Record<string, string[]>>({});
   const [previewDoc, setPreviewDoc] = useState<{ filename: string; text: string } | null>(null);
+  const confirm = useConfirmStore((s) => s.confirm);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
@@ -297,7 +299,8 @@ export default function ConversationPage() {
   };
 
   const handleDelete = async () => {
-    if (!confirm('Delete this conversation? This cannot be undone.')) return;
+    const ok = await confirm({ title: 'Delete Conversation', message: 'Delete this conversation? This cannot be undone.' });
+    if (!ok) return;
     await deleteConversation(convId);
     navigate('/conversations');
   };
@@ -713,6 +716,7 @@ export default function ConversationPage() {
           </div>
         </div>
       )}
+
     </div>
   );
 }

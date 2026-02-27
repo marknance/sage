@@ -3,10 +3,12 @@ import { Link } from 'react-router';
 import { useAdminStore } from '../stores/adminStore';
 import { useAuthStore } from '../stores/authStore';
 import { toast } from '../stores/toastStore';
+import { useConfirmStore } from '../stores/confirmStore';
 
 export default function AdminUsersPage() {
   const { users, isLoading, fetchUsers, updateUserRole, deleteUser, resetUserPassword } = useAdminStore();
   const currentUser = useAuthStore((s) => s.user);
+  const confirm = useConfirmStore((s) => s.confirm);
   const [tempPasswordModal, setTempPasswordModal] = useState<{ username: string; password: string } | null>(null);
   const [search, setSearch] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -92,8 +94,8 @@ export default function AdminUsersPage() {
                             Reset PW
                           </button>
                           <button
-                            onClick={() => {
-                              if (confirm(`Delete user "${user.username}"? This cannot be undone.`)) {
+                            onClick={async () => {
+                              if (await confirm({ title: 'Delete User', message: `Delete user "${user.username}"? This cannot be undone.` })) {
                                 deleteUser(user.id);
                               }
                             }}

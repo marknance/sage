@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
 import ProtectedRoute from './components/ProtectedRoute';
 import ToastContainer from './components/Toast';
+import ConfirmModal from './components/ConfirmModal';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
@@ -30,6 +31,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ToastContainer />
+      <ConfirmModal />
       <BrowserRouter>
         <Routes>
           {/* Public routes */}
