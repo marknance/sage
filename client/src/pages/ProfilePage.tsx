@@ -1,10 +1,17 @@
-import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router';
+import { useState, useEffect, type FormEvent } from 'react';
+import { useNavigate, Link } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
+import { useBackendStore } from '../stores/backendStore';
+import { api } from '../lib/api';
 
 export default function ProfilePage() {
   const { user, logout, changePassword } = useAuthStore();
+  const { backends, fetchBackends } = useBackendStore();
   const navigate = useNavigate();
+
+  const [defaultBackendId, setDefaultBackendId] = useState<string>('');
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsSaved, setSettingsSaved] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -12,6 +19,28 @@ export default function ProfilePage() {
   const [pwError, setPwError] = useState('');
   const [pwSuccess, setPwSuccess] = useState('');
   const [pwLoading, setPwLoading] = useState(false);
+
+  useEffect(() => {
+    fetchBackends();
+    api<{ settings: any }>('/api/settings').then(({ settings }) => {
+      setDefaultBackendId(settings.default_backend_id ? String(settings.default_backend_id) : '');
+    });
+  }, [fetchBackends]);
+
+  async function handleSaveSettings() {
+    setSettingsLoading(true);
+    setSettingsSaved(false);
+    try {
+      await api('/api/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ default_backend_id: defaultBackendId ? Number(defaultBackendId) : null }),
+      });
+      setSettingsSaved(true);
+      setTimeout(() => setSettingsSaved(false), 2000);
+    } finally {
+      setSettingsLoading(false);
+    }
+  }
 
   async function handleLogout() {
     await logout();
@@ -50,6 +79,11 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-background px-4 py-12">
       <div className="max-w-md mx-auto space-y-6">
+        {/* Nav */}
+        <div className="flex gap-3">
+          <Link to="/conversations" className="text-text-muted hover:text-text-primary transition-colors">&larr; Back</Link>
+        </div>
+
         {/* User Info */}
         <div className="bg-surface rounded-xl border border-border p-6">
           <h1 className="text-2xl font-semibold text-text-primary mb-4">Profile</h1>
@@ -74,6 +108,44 @@ export default function ProfilePage() {
           >
             Sign Out
           </button>
+        </div>
+
+        {/* Default AI Backend */}
+        <div className="bg-surface rounded-xl border border-border p-6">
+          <h2 className="text-lg font-semibold text-text-primary mb-4">Default AI Backend</h2>
+          <p className="text-sm text-text-muted mb-3">
+            Used when an expert has no backend assigned. Experts with a specific backend will use that instead.
+          </p>
+          <div className="flex gap-2">
+            <select
+              value={defaultBackendId}
+              onChange={(e) => setDefaultBackendId(e.target.value)}
+              className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+            >
+              <option value="">System default (Ollama localhost)</option>
+              {backends.filter((b) => b.is_active).map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name} ({b.type})
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleSaveSettings}
+              disabled={settingsLoading}
+              className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              {settingsLoading ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+          {settingsSaved && (
+            <p className="mt-2 text-sm text-green-400">Settings saved.</p>
+          )}
+          {backends.length === 0 && (
+            <p className="mt-3 text-sm text-text-muted">
+              No backends configured.{' '}
+              <Link to="/backends/new" className="text-primary hover:underline">Add one</Link>
+            </p>
+          )}
         </div>
 
         {/* Change Password */}
