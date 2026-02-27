@@ -14,6 +14,7 @@ import BackendsPage from './pages/BackendsPage';
 import BackendFormPage from './pages/BackendFormPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import AdminUsersPage from './pages/AdminUsersPage';
+import AdminContentPage from './pages/AdminContentPage';
 import CategoriesPage from './pages/CategoriesPage';
 
 const queryClient = new QueryClient({
@@ -54,6 +55,7 @@ function App() {
           <Route element={<ProtectedRoute requiredRole="admin" />}>
             <Route path="/admin" element={<AdminDashboardPage />} />
             <Route path="/admin/users" element={<AdminUsersPage />} />
+            <Route path="/admin/content" element={<AdminContentPage />} />
           </Route>
 
           {/* Catch-all */}

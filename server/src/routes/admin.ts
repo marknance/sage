@@ -71,6 +71,83 @@ router.put('/users/:id/password', async (req, res) => {
   res.json({ tempPassword });
 });
 
+// GET /conversations — admin list all conversations
+router.get('/conversations', (req, res) => {
+  const { search } = req.query;
+  const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
+  const offset = Math.max(Number(req.query.offset) || 0, 0);
+
+  let where = '1=1';
+  const params: any[] = [];
+  if (search && typeof search === 'string') {
+    where += ' AND c.title LIKE ?';
+    params.push(`%${search}%`);
+  }
+
+  const countResult = db.prepare(`SELECT COUNT(*) as total FROM conversations c WHERE ${where}`).get(...params) as { total: number };
+
+  const conversations = db.prepare(`
+    SELECT c.id, c.title, c.type, c.created_at,
+      u.username,
+      (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) as message_count
+    FROM conversations c
+    JOIN users u ON u.id = c.user_id
+    WHERE ${where}
+    ORDER BY c.updated_at DESC
+    LIMIT ? OFFSET ?
+  `).all(...params, limit, offset);
+
+  res.json({ conversations, total: countResult.total });
+});
+
+// GET /experts — admin list all experts
+router.get('/experts', (req, res) => {
+  const { search } = req.query;
+  const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
+  const offset = Math.max(Number(req.query.offset) || 0, 0);
+
+  let where = '1=1';
+  const params: any[] = [];
+  if (search && typeof search === 'string') {
+    where += ' AND (e.name LIKE ? OR e.domain LIKE ?)';
+    params.push(`%${search}%`, `%${search}%`);
+  }
+
+  const countResult = db.prepare(`SELECT COUNT(*) as total FROM experts e WHERE ${where}`).get(...params) as { total: number };
+
+  const experts = db.prepare(`
+    SELECT e.id, e.name, e.domain, e.created_at,
+      u.username
+    FROM experts e
+    JOIN users u ON u.id = e.user_id
+    WHERE ${where}
+    ORDER BY e.created_at DESC
+    LIMIT ? OFFSET ?
+  `).all(...params, limit, offset);
+
+  res.json({ experts, total: countResult.total });
+});
+
+// DELETE /conversations/:id — admin delete any conversation
+router.delete('/conversations/:id', (req, res) => {
+  const result = db.prepare('DELETE FROM conversations WHERE id = ?').run(req.params.id);
+  if (result.changes === 0) {
+    res.status(404).json({ error: 'Conversation not found' });
+    return;
+  }
+  res.json({ message: 'Conversation deleted' });
+});
+
+// DELETE /experts/:id — admin delete any expert
+router.delete('/experts/:id', (req, res) => {
+  const result = db.prepare('DELETE FROM experts WHERE id = ?').run(req.params.id);
+  if (result.changes === 0) {
+    res.status(404).json({ error: 'Expert not found' });
+    return;
+  }
+  res.json({ message: 'Expert deleted' });
+});
+
 // GET /stats — system statistics
 router.get('/stats', (_req, res) => {
   const users = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };

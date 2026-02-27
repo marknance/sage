@@ -20,22 +20,51 @@ export interface SystemStats {
   db_size: number;
 }
 
+interface AdminConversation {
+  id: number;
+  title: string;
+  type: string;
+  username: string;
+  message_count: number;
+  created_at: string;
+}
+
+interface AdminExpert {
+  id: number;
+  name: string;
+  domain: string;
+  username: string;
+  created_at: string;
+}
+
 interface AdminState {
   users: AdminUser[];
   stats: SystemStats | null;
   isLoading: boolean;
+  adminConversations: AdminConversation[];
+  adminConversationsTotal: number;
+  adminExperts: AdminExpert[];
+  adminExpertsTotal: number;
 
   fetchUsers: () => Promise<void>;
   updateUserRole: (id: number, role: string) => Promise<void>;
   deleteUser: (id: number) => Promise<void>;
   resetUserPassword: (id: number) => Promise<string>;
   fetchStats: () => Promise<void>;
+  fetchAdminConversations: (params?: { search?: string; limit?: number; offset?: number }) => Promise<void>;
+  fetchAdminExperts: (params?: { search?: string; limit?: number; offset?: number }) => Promise<void>;
+  deleteAdminConversation: (id: number) => Promise<void>;
+  deleteAdminExpert: (id: number) => Promise<void>;
 }
 
 export const useAdminStore = create<AdminState>((set) => ({
   users: [],
   stats: null,
   isLoading: false,
+  adminConversations: [],
+  adminConversationsTotal: 0,
+  adminExperts: [],
+  adminExpertsTotal: 0,
 
   fetchUsers: async () => {
     set({ isLoading: true });
@@ -87,5 +116,51 @@ export const useAdminStore = create<AdminState>((set) => ({
     } catch (err: any) {
       toast.error(err.message || 'Failed to load stats');
     }
+  },
+
+  fetchAdminConversations: async (params) => {
+    try {
+      const query = new URLSearchParams();
+      if (params?.search) query.set('search', params.search);
+      if (params?.limit) query.set('limit', String(params.limit));
+      if (params?.offset) query.set('offset', String(params.offset));
+      const qs = query.toString();
+      const data = await api<{ conversations: AdminConversation[]; total: number }>(`/api/admin/conversations${qs ? `?${qs}` : ''}`);
+      set({ adminConversations: data.conversations, adminConversationsTotal: data.total });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to load conversations');
+    }
+  },
+
+  fetchAdminExperts: async (params) => {
+    try {
+      const query = new URLSearchParams();
+      if (params?.search) query.set('search', params.search);
+      if (params?.limit) query.set('limit', String(params.limit));
+      if (params?.offset) query.set('offset', String(params.offset));
+      const qs = query.toString();
+      const data = await api<{ experts: AdminExpert[]; total: number }>(`/api/admin/experts${qs ? `?${qs}` : ''}`);
+      set({ adminExperts: data.experts, adminExpertsTotal: data.total });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to load experts');
+    }
+  },
+
+  deleteAdminConversation: async (id) => {
+    await api(`/api/admin/conversations/${id}`, { method: 'DELETE' });
+    set((s) => ({
+      adminConversations: s.adminConversations.filter((c) => c.id !== id),
+      adminConversationsTotal: s.adminConversationsTotal - 1,
+    }));
+    toast.success('Conversation deleted');
+  },
+
+  deleteAdminExpert: async (id) => {
+    await api(`/api/admin/experts/${id}`, { method: 'DELETE' });
+    set((s) => ({
+      adminExperts: s.adminExperts.filter((e) => e.id !== id),
+      adminExpertsTotal: s.adminExpertsTotal - 1,
+    }));
+    toast.success('Expert deleted');
   },
 }));
