@@ -1,0 +1,10 @@
+.playwright-cli/
+.playwright/
+node_modules/
+dist/
+.env
+*.db
+!.autoforge/features.db
+server/data/*.db
+server/uploads/
+.DS_Store

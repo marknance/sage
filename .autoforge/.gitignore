@@ -7,7 +7,9 @@ assistant.db-wal
 assistant.db-shm
 .agent.lock
 .devserver.lock
+.pause_drain
 .claude_settings.json
 .claude_assistant_settings.json
 .claude_settings.expand.*.json
 .progress_cache
+.migration_version
