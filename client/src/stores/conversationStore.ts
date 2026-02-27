@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api, streamApi } from '../lib/api';
+import { toast } from './toastStore';
 import type { Expert } from './expertStore';
 
 export interface Conversation {
@@ -76,8 +77,9 @@ export const useConversationStore = create<ConversationState>((set) => ({
     try {
       const { conversations } = await api<{ conversations: Conversation[] }>('/api/conversations');
       set({ conversations, isLoading: false });
-    } catch {
+    } catch (err: any) {
       set({ isLoading: false });
+      toast.error(err.message || 'Failed to load conversations');
     }
   },
 
@@ -98,8 +100,9 @@ export const useConversationStore = create<ConversationState>((set) => ({
         suggestedExperts: [],
         isLoading: false,
       });
-    } catch {
+    } catch (err: any) {
       set({ isLoading: false });
+      toast.error(err.message || 'Failed to load conversation');
     }
   },
 
@@ -126,6 +129,7 @@ export const useConversationStore = create<ConversationState>((set) => ({
       conversations: s.conversations.filter((c) => c.id !== id),
       currentConversation: null,
     }));
+    toast.success('Conversation deleted');
   },
 
   sendMessage: async (id, content) => {
@@ -156,12 +160,12 @@ export const useConversationStore = create<ConversationState>((set) => ({
         suggestedExperts: suggestedExperts || [],
         isSending: false,
       }));
-    } catch {
-      // Remove optimistic user message on error, re-add without temp
+    } catch (err: any) {
       set((s) => ({
         messages: s.messages.filter((m) => m.id > 0),
         isSending: false,
       }));
+      toast.error(err.message || 'Failed to send message');
     }
   },
 
@@ -234,12 +238,13 @@ export const useConversationStore = create<ConversationState>((set) => ({
       });
       // Ensure flags are cleared even if done event was missed
       set({ isSending: false, isStreaming: false });
-    } catch {
+    } catch (err: any) {
       set((s) => ({
         messages: s.messages.filter((m) => m.id > 0),
         isSending: false,
         isStreaming: false,
       }));
+      toast.error(err.message || 'Failed to get AI response');
     }
   },
 

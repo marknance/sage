@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api';
+import { toast } from './toastStore';
 
 export interface Backend {
   id: number;
@@ -48,8 +49,9 @@ export const useBackendStore = create<BackendState>((set) => ({
     try {
       const { backends } = await api<{ backends: Backend[] }>('/api/backends');
       set({ backends, isLoading: false });
-    } catch {
+    } catch (err: any) {
       set({ isLoading: false });
+      toast.error(err.message || 'Failed to load backends');
     }
   },
 
@@ -58,8 +60,9 @@ export const useBackendStore = create<BackendState>((set) => ({
     try {
       const data = await api<{ backend: Backend; expert_count: number }>(`/api/backends/${id}`);
       set({ currentBackend: data.backend, isLoading: false });
-    } catch {
+    } catch (err: any) {
       set({ isLoading: false });
+      toast.error(err.message || 'Failed to load backend');
     }
   },
 
@@ -82,6 +85,7 @@ export const useBackendStore = create<BackendState>((set) => ({
   deleteBackend: async (id) => {
     await api(`/api/backends/${id}`, { method: 'DELETE' });
     set((s) => ({ backends: s.backends.filter((b) => b.id !== id), currentBackend: null }));
+    toast.success('Backend deleted');
   },
 
   testBackend: async (id) => {
@@ -94,8 +98,9 @@ export const useBackendStore = create<BackendState>((set) => ({
     try {
       const { models } = await api<{ models: string[] }>(`/api/backends/${id}/models`);
       set({ models });
-    } catch {
+    } catch (err: any) {
       set({ models: [] });
+      toast.error(err.message || 'Failed to fetch models');
     }
   },
 

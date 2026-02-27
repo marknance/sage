@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api';
+import { toast } from './toastStore';
 
 export interface Expert {
   id: number;
@@ -86,8 +87,9 @@ export const useExpertStore = create<ExpertState>((set, get) => ({
       const qs = query.toString();
       const { experts } = await api<{ experts: Expert[] }>(`/api/experts${qs ? `?${qs}` : ''}`);
       set({ experts, isLoading: false });
-    } catch {
+    } catch (err: any) {
       set({ isLoading: false });
+      toast.error(err.message || 'Failed to load experts');
     }
   },
 
@@ -98,8 +100,9 @@ export const useExpertStore = create<ExpertState>((set, get) => ({
         `/api/experts/${id}`
       );
       set({ currentExpert: data.expert, behaviors: data.behaviors, categories: data.categories, isLoading: false });
-    } catch {
+    } catch (err: any) {
       set({ isLoading: false });
+      toast.error(err.message || 'Failed to load expert');
     }
   },
 
@@ -117,11 +120,13 @@ export const useExpertStore = create<ExpertState>((set, get) => ({
       body: JSON.stringify(data),
     });
     set({ currentExpert: expert });
+    toast.success('Expert updated');
   },
 
   deleteExpert: async (id) => {
     await api(`/api/experts/${id}`, { method: 'DELETE' });
     set((s) => ({ experts: s.experts.filter((e) => e.id !== id), currentExpert: null }));
+    toast.success('Expert deleted');
   },
 
   updateBehaviors: async (id, behaviors) => {
