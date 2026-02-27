@@ -8,3 +8,4 @@ dist/
 server/data/*.db
 server/uploads/
 .DS_Store
+*.png
