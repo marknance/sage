@@ -34,7 +34,7 @@ router.use(authenticate);
 // GET / — list conversations
 router.get('/', (req, res) => {
   const userId = req.user!.id;
-  const { search, sort, type } = req.query;
+  const { search, sort, type, pinned } = req.query;
 
   let query = `
     SELECT c.*,
@@ -56,12 +56,16 @@ router.get('/', (req, res) => {
     params.push(type);
   }
 
+  if (pinned === '1') {
+    query += ' AND c.is_pinned = 1';
+  }
+
   if (sort === 'title') {
-    query += ` ORDER BY c.title ASC`;
+    query += ` ORDER BY c.is_pinned DESC, c.title ASC`;
   } else if (sort === 'created') {
-    query += ` ORDER BY c.created_at DESC`;
+    query += ` ORDER BY c.is_pinned DESC, c.created_at DESC`;
   } else {
-    query += ` ORDER BY c.updated_at DESC`;
+    query += ` ORDER BY c.is_pinned DESC, c.updated_at DESC`;
   }
 
   // Count total before pagination
@@ -238,6 +242,21 @@ router.delete('/:id', (req, res) => {
     return;
   }
   res.json({ message: 'Conversation deleted' });
+});
+
+// PATCH /:id/pin — toggle pinned status
+router.patch('/:id/pin', (req, res) => {
+  const conversation = db.prepare('SELECT id, is_pinned FROM conversations WHERE id = ? AND user_id = ?')
+    .get(req.params.id, req.user!.id) as any;
+  if (!conversation) {
+    res.status(404).json({ error: 'Conversation not found' });
+    return;
+  }
+
+  const newValue = conversation.is_pinned ? 0 : 1;
+  db.prepare('UPDATE conversations SET is_pinned = ? WHERE id = ?').run(newValue, req.params.id);
+  const updated = db.prepare('SELECT * FROM conversations WHERE id = ?').get(req.params.id);
+  res.json({ conversation: updated });
 });
 
 // POST /:id/experts — assign expert

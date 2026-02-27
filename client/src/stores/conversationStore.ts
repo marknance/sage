@@ -11,6 +11,7 @@ export interface Conversation {
   expert_debate_enabled: number;
   auto_suggest_experts: number;
   created_at: string;
+  is_pinned?: number;
   updated_at: string;
   expert_count?: number;
   last_message?: string | null;
@@ -52,7 +53,8 @@ interface ConversationState {
   isSending: boolean;
   isStreaming: boolean;
 
-  fetchConversations: (params?: { search?: string; sort?: string; type?: string; limit?: number; offset?: number }) => Promise<void>;
+  fetchConversations: (params?: { search?: string; sort?: string; type?: string; pinned?: string; limit?: number; offset?: number }) => Promise<void>;
+  togglePin: (id: number) => Promise<void>;
   fetchOlderMessages: (conversationId: number, beforeId: number) => Promise<void>;
   fetchConversation: (id: number) => Promise<void>;
   createConversation: (title?: string, type?: string) => Promise<Conversation>;
@@ -91,6 +93,7 @@ export const useConversationStore = create<ConversationState>((set) => ({
       if (params?.search) query.set('search', params.search);
       if (params?.sort) query.set('sort', params.sort);
       if (params?.type) query.set('type', params.type);
+      if (params?.pinned) query.set('pinned', params.pinned);
       if (params?.limit) query.set('limit', String(params.limit));
       if (params?.offset) query.set('offset', String(params.offset));
       const qs = query.toString();
@@ -151,6 +154,15 @@ export const useConversationStore = create<ConversationState>((set) => ({
       currentConversation: null,
     }));
     toast.success('Conversation deleted');
+  },
+
+  togglePin: async (id) => {
+    const { conversation } = await api<{ conversation: Conversation }>(`/api/conversations/${id}/pin`, {
+      method: 'PATCH',
+    });
+    set((s) => ({
+      conversations: s.conversations.map((c) => c.id === id ? { ...c, is_pinned: conversation.is_pinned } : c),
+    }));
   },
 
   fetchOlderMessages: async (conversationId, beforeId) => {

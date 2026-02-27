@@ -165,6 +165,13 @@ try {
   // Column already exists
 }
 
+// Migration: add is_pinned column to conversations
+try {
+  db.exec('ALTER TABLE conversations ADD COLUMN is_pinned INTEGER DEFAULT 0');
+} catch {
+  // Column already exists
+}
+
 // Seed admin user if not exists
 const existingAdmin = db.prepare('SELECT id FROM users WHERE email = ?').get('admin@sage.local');
 if (!existingAdmin) {

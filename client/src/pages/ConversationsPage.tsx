@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { useConversationStore } from '../stores/conversationStore';
 
 export default function ConversationsPage() {
-  const { conversations, total, limit, offset, isLoading, fetchConversations, createConversation } = useConversationStore();
+  const { conversations, total, limit, offset, isLoading, fetchConversations, createConversation, togglePin } = useConversationStore();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('recent');
@@ -12,18 +12,19 @@ export default function ConversationsPage() {
   const [page, setPage] = useState(0);
   const [newType, setNewType] = useState('standard');
   const [filterType, setFilterType] = useState('');
+  const [pinnedOnly, setPinnedOnly] = useState(false);
 
   useEffect(() => {
     setPage(0); // reset page on filter change
-  }, [search, sort, filterType]);
+  }, [search, sort, filterType, pinnedOnly]);
 
   useEffect(() => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      fetchConversations({ search: search || undefined, sort, type: filterType || undefined, offset: page * 24 });
+      fetchConversations({ search: search || undefined, sort, type: filterType || undefined, pinned: pinnedOnly ? '1' : undefined, offset: page * 24 });
     }, search ? 300 : 0);
     return () => clearTimeout(debounceRef.current);
-  }, [search, sort, filterType, page, fetchConversations]);
+  }, [search, sort, filterType, pinnedOnly, page, fetchConversations]);
 
   const handleNew = async () => {
     const conv = await createConversation(undefined, newType);
@@ -85,6 +86,15 @@ export default function ConversationsPage() {
             <option value="brainstorm">Brainstorm</option>
             <option value="debug">Debug</option>
           </select>
+          <label className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              checked={pinnedOnly}
+              onChange={(e) => setPinnedOnly(e.target.checked)}
+              className="accent-primary"
+            />
+            Pinned only
+          </label>
         </div>
 
         {/* Content */}
@@ -103,12 +113,27 @@ export default function ConversationsPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {conversations.map((conv) => (
-              <Link
+              <div
                 key={conv.id}
-                to={`/conversations/${conv.id}`}
-                className="bg-surface rounded-xl border border-border p-5 hover:border-primary/50 transition-colors"
+                className={`bg-surface rounded-xl border p-5 hover:border-primary/50 transition-colors relative ${
+                  conv.is_pinned ? 'border-primary/30' : 'border-border'
+                }`}
               >
-                <div className="flex items-start justify-between mb-2">
+                <button
+                  onClick={(e) => { e.preventDefault(); togglePin(conv.id); }}
+                  className={`absolute top-2 right-2 text-sm z-10 p-1 rounded hover:bg-background transition-colors ${
+                    conv.is_pinned ? 'text-primary' : 'text-text-muted opacity-0 group-hover:opacity-100'
+                  }`}
+                  title={conv.is_pinned ? 'Unpin' : 'Pin'}
+                  style={conv.is_pinned ? {} : { opacity: 0.4 }}
+                >
+                  {conv.is_pinned ? '\uD83D\uDCCC' : '\uD83D\uDCCC'}
+                </button>
+                <Link
+                  to={`/conversations/${conv.id}`}
+                  className="block"
+                >
+                <div className="flex items-start justify-between mb-2 pr-6">
                   <h3 className="text-lg font-medium text-text-primary line-clamp-1">{conv.title}</h3>
                   <span className="ml-2 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs shrink-0">
                     {conv.type}
@@ -121,7 +146,8 @@ export default function ConversationsPage() {
                   <span>{conv.expert_count || 0} expert{conv.expert_count !== 1 ? 's' : ''}</span>
                   <span>{new Date(conv.updated_at).toLocaleDateString()}</span>
                 </div>
-              </Link>
+                </Link>
+              </div>
             ))}
           </div>
         )}
