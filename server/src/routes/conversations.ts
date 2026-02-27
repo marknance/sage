@@ -27,14 +27,32 @@ router.use(authenticate);
 // GET / — list conversations
 router.get('/', (req, res) => {
   const userId = req.user!.id;
-  const conversations = db.prepare(`
+  const { search, sort } = req.query;
+
+  let query = `
     SELECT c.*,
       (SELECT COUNT(*) FROM conversation_experts ce WHERE ce.conversation_id = c.id) as expert_count,
       (SELECT m.content FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message
     FROM conversations c
     WHERE c.user_id = ?
-    ORDER BY c.updated_at DESC
-  `).all(userId);
+  `;
+  const params: any[] = [userId];
+
+  if (search && typeof search === 'string') {
+    const term = `%${search}%`;
+    query += ` AND (c.title LIKE ? OR EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.content LIKE ?))`;
+    params.push(term, term);
+  }
+
+  if (sort === 'title') {
+    query += ` ORDER BY c.title ASC`;
+  } else if (sort === 'created') {
+    query += ` ORDER BY c.created_at DESC`;
+  } else {
+    query += ` ORDER BY c.updated_at DESC`;
+  }
+
+  const conversations = db.prepare(query).all(...params);
   res.json({ conversations });
 });
 

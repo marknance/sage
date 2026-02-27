@@ -47,7 +47,7 @@ interface ConversationState {
   isSending: boolean;
   isStreaming: boolean;
 
-  fetchConversations: () => Promise<void>;
+  fetchConversations: (params?: { search?: string; sort?: string }) => Promise<void>;
   fetchConversation: (id: number) => Promise<void>;
   createConversation: (title?: string) => Promise<Conversation>;
   updateConversation: (id: number, data: Partial<Conversation>) => Promise<void>;
@@ -72,10 +72,14 @@ export const useConversationStore = create<ConversationState>((set) => ({
   isSending: false,
   isStreaming: false,
 
-  fetchConversations: async () => {
+  fetchConversations: async (params) => {
     set({ isLoading: true });
     try {
-      const { conversations } = await api<{ conversations: Conversation[] }>('/api/conversations');
+      const query = new URLSearchParams();
+      if (params?.search) query.set('search', params.search);
+      if (params?.sort) query.set('sort', params.sort);
+      const qs = query.toString();
+      const { conversations } = await api<{ conversations: Conversation[] }>(`/api/conversations${qs ? `?${qs}` : ''}`);
       set({ conversations, isLoading: false });
     } catch (err: any) {
       set({ isLoading: false });

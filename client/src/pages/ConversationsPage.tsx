@@ -1,14 +1,21 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useConversationStore } from '../stores/conversationStore';
 
 export default function ConversationsPage() {
   const { conversations, isLoading, fetchConversations, createConversation } = useConversationStore();
   const navigate = useNavigate();
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState('recent');
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
-    fetchConversations();
-  }, [fetchConversations]);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchConversations({ search: search || undefined, sort });
+    }, search ? 300 : 0);
+    return () => clearTimeout(debounceRef.current);
+  }, [search, sort, fetchConversations]);
 
   const handleNew = async () => {
     const conv = await createConversation();
@@ -41,6 +48,26 @@ export default function ConversationsPage() {
               New Conversation
             </button>
           </div>
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-wrap gap-3 mb-6">
+          <input
+            type="text"
+            placeholder="Search conversations..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="flex-1 min-w-[200px] px-3 py-2 rounded-lg bg-surface border border-border text-text-primary focus:outline-none focus:border-primary"
+          />
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+            className="px-3 py-2 rounded-lg bg-surface border border-border text-text-primary focus:outline-none focus:border-primary"
+          >
+            <option value="recent">Recently Updated</option>
+            <option value="title">Title</option>
+            <option value="created">Newest</option>
+          </select>
         </div>
 
         {/* Content */}
