@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { api } from '../lib/api';
+import { api, streamApi } from '../lib/api';
 import type { Expert } from './expertStore';
 
 export interface Conversation {
@@ -44,6 +44,7 @@ interface ConversationState {
   suggestedExperts: Expert[];
   isLoading: boolean;
   isSending: boolean;
+  isStreaming: boolean;
 
   fetchConversations: () => Promise<void>;
   fetchConversation: (id: number) => Promise<void>;
@@ -51,6 +52,7 @@ interface ConversationState {
   updateConversation: (id: number, data: Partial<Conversation>) => Promise<void>;
   deleteConversation: (id: number) => Promise<void>;
   sendMessage: (id: number, content: string) => Promise<void>;
+  sendMessageStream: (id: number, content: string) => Promise<void>;
   assignExpert: (conversationId: number, expertId: number) => Promise<void>;
   removeExpert: (conversationId: number, expertId: number) => Promise<void>;
   updateExpertOverride: (conversationId: number, expertId: number, data: { backend_override_id?: number | null; model_override?: string | null }) => Promise<void>;
@@ -67,6 +69,7 @@ export const useConversationStore = create<ConversationState>((set) => ({
   suggestedExperts: [],
   isLoading: false,
   isSending: false,
+  isStreaming: false,
 
   fetchConversations: async () => {
     set({ isLoading: true });
@@ -158,6 +161,84 @@ export const useConversationStore = create<ConversationState>((set) => ({
       set((s) => ({
         messages: s.messages.filter((m) => m.id > 0),
         isSending: false,
+      }));
+    }
+  },
+
+  sendMessageStream: async (id, content) => {
+    const tempUserId = -Date.now();
+    set((s) => ({
+      isSending: true,
+      isStreaming: false,
+      messages: [...s.messages, {
+        id: tempUserId,
+        conversation_id: id,
+        expert_id: null,
+        role: 'user' as const,
+        content,
+        created_at: new Date().toISOString(),
+      }],
+    }));
+
+    let currentPlaceholderId = -1;
+
+    try {
+      await streamApi(`/api/conversations/${id}/messages/stream`, { content }, (event, data) => {
+        switch (event) {
+          case 'user_message':
+            // Replace optimistic user message with real one
+            set((s) => ({
+              messages: s.messages.map((m) => m.id === tempUserId ? data : m),
+            }));
+            break;
+          case 'expert_start':
+            currentPlaceholderId = -(Date.now() + data.message_index);
+            set((s) => ({
+              isStreaming: true,
+              messages: [...s.messages, {
+                id: currentPlaceholderId,
+                conversation_id: id,
+                expert_id: data.expert_id,
+                role: 'assistant' as const,
+                content: '',
+                expert_name: data.expert_name,
+                created_at: new Date().toISOString(),
+              }],
+            }));
+            break;
+          case 'token':
+            set((s) => ({
+              messages: s.messages.map((m) =>
+                m.id === currentPlaceholderId
+                  ? { ...m, content: m.content + data.content }
+                  : m
+              ),
+            }));
+            break;
+          case 'expert_end':
+            // Swap placeholder with saved message from server
+            set((s) => ({
+              messages: s.messages.map((m) => m.id === currentPlaceholderId ? data : m),
+            }));
+            break;
+          case 'suggested_experts':
+            set({ suggestedExperts: data.experts || [] });
+            break;
+          case 'error':
+            console.error('Stream error:', data.message);
+            break;
+          case 'done':
+            set({ isSending: false, isStreaming: false });
+            break;
+        }
+      });
+      // Ensure flags are cleared even if done event was missed
+      set({ isSending: false, isStreaming: false });
+    } catch {
+      set((s) => ({
+        messages: s.messages.filter((m) => m.id > 0),
+        isSending: false,
+        isStreaming: false,
       }));
     }
   },

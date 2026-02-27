@@ -68,6 +68,64 @@ export function buildSystemPrompt(
   return parts.join('\n\n');
 }
 
+export async function* chatCompletionStream(
+  options: ChatCompletionOptions & { signal?: AbortSignal }
+): AsyncGenerator<string, void, undefined> {
+  const { model = DEFAULT_MODEL, messages, temperature = 0.7, backend, signal } = options;
+
+  const systemMessages = messages.filter((m) => m.role === 'system');
+  const nonSystem = messages.filter((m) => m.role !== 'system');
+  const trimmed = nonSystem.slice(-MAX_CONTEXT_MESSAGES);
+  const finalMessages = [...systemMessages, ...trimmed];
+
+  const baseUrl = backend?.base_url || OLLAMA_BASE_URL;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (backend?.api_key) {
+    headers['Authorization'] = `Bearer ${backend.api_key}`;
+  }
+  if (backend?.org_id) {
+    headers['OpenAI-Organization'] = backend.org_id;
+  }
+
+  const { data: stream } = await axios.post(
+    `${baseUrl}/v1/chat/completions`,
+    {
+      model,
+      messages: finalMessages,
+      temperature,
+      stream: true,
+    },
+    {
+      headers,
+      responseType: 'stream',
+      timeout: TIMEOUT_MS,
+      signal,
+    }
+  );
+
+  let buffer = '';
+
+  for await (const chunk of stream) {
+    buffer += chunk.toString();
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
+      const payload = trimmedLine.slice(6);
+      if (payload === '[DONE]') return;
+      try {
+        const parsed = JSON.parse(payload);
+        const content = parsed.choices?.[0]?.delta?.content;
+        if (content) yield content;
+      } catch {
+        // skip malformed JSON lines
+      }
+    }
+  }
+}
+
 export async function chatCompletion(options: ChatCompletionOptions): Promise<string> {
   const { model = DEFAULT_MODEL, messages, temperature = 0.7, backend } = options;
 

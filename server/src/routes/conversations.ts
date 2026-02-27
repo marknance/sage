@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { db } from '../index.js';
 import { authenticate } from '../middleware/auth.js';
-import { chatCompletion, buildSystemPrompt, resolveBackendConfig } from '../services/ollama.js';
+import { chatCompletion, chatCompletionStream, buildSystemPrompt, resolveBackendConfig } from '../services/ollama.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -252,6 +252,166 @@ router.get('/:id/messages', (req, res) => {
   res.json({ messages });
 });
 
+// POST /:id/messages/stream — SSE streaming response
+router.post('/:id/messages/stream', async (req, res) => {
+  // SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const sendEvent = (event: string, data: any) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  // Abort controller for cancellation on client disconnect
+  const abortController = new AbortController();
+  let disconnected = false;
+  res.on('close', () => {
+    if (!res.writableFinished) {
+      disconnected = true;
+      abortController.abort();
+    }
+  });
+
+  try {
+    const conversation = db.prepare('SELECT * FROM conversations WHERE id = ? AND user_id = ?')
+      .get(req.params.id, req.user!.id) as any;
+    if (!conversation) {
+      sendEvent('error', { message: 'Conversation not found' });
+      sendEvent('done', {});
+      res.end();
+      return;
+    }
+
+    const { content } = req.body;
+    if (!content || typeof content !== 'string') {
+      sendEvent('error', { message: 'content is required' });
+      sendEvent('done', {});
+      res.end();
+      return;
+    }
+
+    // Save user message
+    const userResult = db.prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)')
+      .run(req.params.id, 'user', content);
+    const userMsg = db.prepare('SELECT * FROM messages WHERE id = ?').get(userResult.lastInsertRowid);
+    sendEvent('user_message', userMsg);
+
+    // Get assigned experts with conversation-level overrides
+    const assignedExperts = db.prepare(`
+      SELECT e.*, ce.backend_override_id, ce.model_override as conv_model_override
+      FROM conversation_experts ce
+      JOIN experts e ON e.id = ce.expert_id
+      WHERE ce.conversation_id = ?
+    `).all(req.params.id) as any[];
+
+    if (assignedExperts.length === 0) {
+      // No experts — default assistant
+      sendEvent('expert_start', { expert_id: null, expert_name: null, message_index: 0 });
+
+      const history = db.prepare('SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at ASC')
+        .all(req.params.id) as { role: string; content: string }[];
+      const messages = [
+        { role: 'system' as const, content: 'You are a helpful AI assistant.' },
+        ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      ];
+
+      const userSettings = db.prepare('SELECT default_backend_id FROM settings WHERE user_id = ?')
+        .get(req.user!.id) as { default_backend_id: number | null } | undefined;
+      const defaultBackend = resolveBackendConfig(null, userSettings?.default_backend_id, db);
+
+      let fullContent = '';
+      for await (const token of chatCompletionStream({ messages, backend: defaultBackend, signal: abortController.signal })) {
+        if (disconnected) break;
+        fullContent += token;
+        sendEvent('token', { content: token });
+      }
+
+      if (!disconnected) {
+        const result = db.prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)')
+          .run(req.params.id, 'assistant', fullContent);
+        const saved = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
+        sendEvent('expert_end', saved);
+
+        if (conversation.auto_suggest_experts) {
+          const suggested = findSuggestedExperts(req.user!.id, content, assignedExperts);
+          if (suggested.length > 0) sendEvent('suggested_experts', { experts: suggested });
+        }
+      }
+    } else if (!conversation.expert_debate_enabled) {
+      // Single expert
+      const expert = assignedExperts[0];
+      sendEvent('expert_start', { expert_id: expert.id, expert_name: expert.name, message_index: 0 });
+
+      const history = db.prepare('SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at ASC')
+        .all(req.params.id) as { role: string; content: string }[];
+
+      let fullContent = '';
+      for await (const token of getExpertResponseStream(expert, history, req.params.id, req.user!.id, abortController.signal)) {
+        if (disconnected) break;
+        fullContent += token;
+        sendEvent('token', { content: token });
+      }
+
+      if (!disconnected) {
+        const result = db.prepare('INSERT INTO messages (conversation_id, expert_id, role, content) VALUES (?, ?, ?, ?)')
+          .run(req.params.id, expert.id, 'assistant', fullContent);
+        const saved = db.prepare('SELECT m.*, e.name as expert_name FROM messages m LEFT JOIN experts e ON e.id = m.expert_id WHERE m.id = ?')
+          .get(result.lastInsertRowid);
+        sendEvent('expert_end', saved);
+        db.prepare('UPDATE experts SET last_used_at = CURRENT_TIMESTAMP WHERE id = ?').run(expert.id);
+      }
+    } else {
+      // Debate mode — each expert responds sequentially
+      for (let i = 0; i < assignedExperts.length; i++) {
+        if (disconnected) break;
+        const expert = assignedExperts[i];
+        sendEvent('expert_start', { expert_id: expert.id, expert_name: expert.name, message_index: i });
+
+        const currentHistory = db.prepare('SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at ASC')
+          .all(req.params.id) as { role: string; content: string }[];
+
+        let fullContent = '';
+        for await (const token of getExpertResponseStream(expert, currentHistory, req.params.id, req.user!.id, abortController.signal)) {
+          if (disconnected) break;
+          fullContent += token;
+          sendEvent('token', { content: token });
+        }
+
+        if (!disconnected) {
+          const result = db.prepare('INSERT INTO messages (conversation_id, expert_id, role, content) VALUES (?, ?, ?, ?)')
+            .run(req.params.id, expert.id, 'assistant', fullContent);
+          const saved = db.prepare('SELECT m.*, e.name as expert_name FROM messages m LEFT JOIN experts e ON e.id = m.expert_id WHERE m.id = ?')
+            .get(result.lastInsertRowid);
+          sendEvent('expert_end', saved);
+          db.prepare('UPDATE experts SET last_used_at = CURRENT_TIMESTAMP WHERE id = ?').run(expert.id);
+        }
+      }
+    }
+
+    if (!disconnected) {
+      db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(req.params.id);
+      sendEvent('done', {});
+    }
+    res.end();
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      // Client disconnected — expected, no action needed
+      res.end();
+      return;
+    }
+    console.error('Stream error:', err.message);
+    try {
+      sendEvent('error', { message: 'Failed to get AI response. Is the backend running?' });
+      sendEvent('done', {});
+    } catch {
+      // Response may already be closed
+    }
+    res.end();
+  }
+});
+
 // POST /:id/messages — send message + get AI response
 router.post('/:id/messages', async (req, res) => {
   try {
@@ -391,6 +551,39 @@ async function getExpertResponse(
   const model = expert.conv_model_override || expert.model_override || undefined;
 
   return chatCompletion({ messages, model, backend });
+}
+
+function getExpertResponseStream(
+  expert: any,
+  history: { role: string; content: string }[],
+  conversationId: string,
+  userId: number,
+  signal: AbortSignal
+): AsyncGenerator<string, void, undefined> {
+  const behaviors = db.prepare('SELECT behavior_key FROM expert_behaviors WHERE expert_id = ? AND enabled = 1')
+    .all(expert.id) as { behavior_key: string }[];
+  const enabledBehaviors = behaviors.map((b) => b.behavior_key);
+
+  const memoriesRows = expert.memory_enabled
+    ? db.prepare('SELECT content FROM expert_memories WHERE expert_id = ? ORDER BY created_at DESC LIMIT 10')
+        .all(expert.id) as { content: string }[]
+    : [];
+  const memories = memoriesRows.map((m) => m.content);
+
+  const systemPrompt = buildSystemPrompt(expert, enabledBehaviors, memories);
+
+  const messages = [
+    { role: 'system' as const, content: systemPrompt },
+    ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+  ];
+
+  const userSettings = db.prepare('SELECT default_backend_id FROM settings WHERE user_id = ?')
+    .get(userId) as { default_backend_id: number | null } | undefined;
+  const backendId = expert.backend_override_id || expert.backend_id;
+  const backend = resolveBackendConfig(backendId, userSettings?.default_backend_id, db);
+  const model = expert.conv_model_override || expert.model_override || undefined;
+
+  return chatCompletionStream({ messages, model, backend, signal });
 }
 
 function findSuggestedExperts(userId: number, messageContent: string, excludeExperts: any[]): any[] {

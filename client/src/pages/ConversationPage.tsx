@@ -20,10 +20,11 @@ export default function ConversationPage() {
     suggestedExperts,
     isLoading,
     isSending,
+    isStreaming,
     fetchConversation,
     updateConversation,
     deleteConversation,
-    sendMessage,
+    sendMessageStream,
     assignExpert,
     removeExpert,
     updateExpertOverride,
@@ -40,6 +41,8 @@ export default function ConversationPage() {
   const [titleDraft, setTitleDraft] = useState('');
   const [modelsMap, setModelsMap] = useState<Record<string, string[]>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(true);
 
   const fetchModelsForBackend = useCallback(async (backendId: number) => {
     const key = String(backendId);
@@ -67,14 +70,23 @@ export default function ConversationPage() {
   }, [assignedExperts, fetchModelsForBackend]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isNearBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
+
+  const handleScroll = useCallback(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const threshold = 100;
+    isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+  }, []);
 
   const handleSend = async () => {
     const text = input.trim();
     if (!text || isSending) return;
     setInput('');
-    await sendMessage(convId, text);
+    await sendMessageStream(convId, text);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -188,7 +200,7 @@ export default function ConversationPage() {
           )}
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+          <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
             {messages.length === 0 && (
               <div className="text-center py-16 text-text-muted">
                 <p>No messages yet. Start the conversation!</p>
@@ -211,15 +223,18 @@ export default function ConversationPage() {
                   )}
                   <div
                     className="prose prose-invert prose-sm max-w-none [&>p]:mb-2 [&>p:last-child]:mb-0"
-                    dangerouslySetInnerHTML={{ __html: marked.parse(msg.content) as string }}
+                    dangerouslySetInnerHTML={{ __html: marked.parse(msg.content || '') as string }}
                   />
+                  {isStreaming && msg.id < 0 && msg.role === 'assistant' && (
+                    <span className="inline-block w-2 h-4 bg-primary/70 animate-pulse ml-0.5 align-text-bottom rounded-sm" />
+                  )}
                   <p className="text-xs text-text-muted mt-2">
                     {new Date(msg.created_at).toLocaleTimeString()}
                   </p>
                 </div>
               </div>
             ))}
-            {isSending && (
+            {isSending && !isStreaming && (
               <div className="flex justify-start">
                 <div className="bg-surface border border-border rounded-xl px-4 py-3">
                   <p className="text-text-muted text-sm animate-pulse">Thinking...</p>
