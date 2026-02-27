@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { useExpertStore, type Behavior } from '../stores/expertStore';
+import { useBackendStore } from '../stores/backendStore';
 
 const TONE_OPTIONS = ['formal', 'casual', 'technical', 'friendly', 'concise'];
 
@@ -35,6 +36,7 @@ export default function ExpertDetailPage() {
     clearMemories,
     fetchAllCategories,
   } = useExpertStore();
+  const { backends, fetchBackends } = useBackendStore();
 
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -43,6 +45,7 @@ export default function ExpertDetailPage() {
     description: '',
     personality_tone: 'formal',
     system_prompt: '',
+    backend_id: '' as string,
     model_override: '',
     memory_enabled: 1,
   });
@@ -58,8 +61,9 @@ export default function ExpertDetailPage() {
       fetchExpert(expertId);
       fetchMemories(expertId);
       fetchAllCategories();
+      fetchBackends();
     }
-  }, [id, expertId, fetchExpert, fetchMemories, fetchAllCategories]);
+  }, [id, expertId, fetchExpert, fetchMemories, fetchAllCategories, fetchBackends]);
 
   useEffect(() => {
     if (currentExpert) {
@@ -69,6 +73,7 @@ export default function ExpertDetailPage() {
         description: currentExpert.description || '',
         personality_tone: currentExpert.personality_tone,
         system_prompt: currentExpert.system_prompt || '',
+        backend_id: currentExpert.backend_id ? String(currentExpert.backend_id) : '',
         model_override: currentExpert.model_override || '',
         memory_enabled: currentExpert.memory_enabled,
       });
@@ -80,6 +85,7 @@ export default function ExpertDetailPage() {
       ...editForm,
       description: editForm.description || null,
       system_prompt: editForm.system_prompt || null,
+      backend_id: editForm.backend_id ? Number(editForm.backend_id) : null,
       model_override: editForm.model_override || null,
     } as any);
     setEditing(false);
@@ -250,6 +256,21 @@ export default function ExpertDetailPage() {
                 />
               </div>
               <div>
+                <label className="block text-sm text-text-secondary mb-1">AI Backend</label>
+                <select
+                  value={editForm.backend_id}
+                  onChange={(e) => setEditForm((f) => ({ ...f, backend_id: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+                >
+                  <option value="">Default (system fallback)</option>
+                  {backends.filter((b) => b.is_active).map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} ({b.type})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm text-text-secondary mb-1">Model Override</label>
                 <input
                   type="text"
@@ -300,6 +321,14 @@ export default function ExpertDetailPage() {
                   <dd className="text-text-primary text-sm whitespace-pre-wrap">{currentExpert.system_prompt}</dd>
                 </div>
               )}
+              <div>
+                <dt className="text-sm text-text-muted">AI Backend</dt>
+                <dd className="text-text-primary">
+                  {currentExpert.backend_id
+                    ? backends.find((b) => b.id === currentExpert.backend_id)?.name || `Backend #${currentExpert.backend_id}`
+                    : 'Default (system fallback)'}
+                </dd>
+              </div>
               {currentExpert.model_override && (
                 <div>
                   <dt className="text-sm text-text-muted">Model Override</dt>

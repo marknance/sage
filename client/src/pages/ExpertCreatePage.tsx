@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { useExpertStore } from '../stores/expertStore';
+import { useBackendStore } from '../stores/backendStore';
 
 const TONE_OPTIONS = ['formal', 'casual', 'technical', 'friendly', 'concise'];
 
@@ -17,8 +18,10 @@ const BEHAVIOR_KEYS = Object.keys(BEHAVIOR_LABELS);
 export default function ExpertCreatePage() {
   const navigate = useNavigate();
   const { createExpert, updateBehaviors } = useExpertStore();
+  const { backends, fetchBackends } = useBackendStore();
 
   const [name, setName] = useState('');
+  const [backend_id, setBackendId] = useState<string>('');
   const [domain, setDomain] = useState('');
   const [description, setDescription] = useState('');
   const [personality_tone, setTone] = useState('formal');
@@ -30,6 +33,10 @@ export default function ExpertCreatePage() {
   );
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetchBackends();
+  }, [fetchBackends]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -47,6 +54,7 @@ export default function ExpertCreatePage() {
         description: description.trim() || null,
         personality_tone,
         system_prompt: system_prompt.trim() || null,
+        backend_id: backend_id ? Number(backend_id) : null,
         model_override: model_override.trim() || null,
         memory_enabled: memory_enabled ? 1 : 0,
       });
@@ -184,6 +192,21 @@ export default function ExpertCreatePage() {
           <div className="bg-surface rounded-xl border border-border p-6">
             <h2 className="text-lg font-medium text-text-primary mb-4">Advanced</h2>
             <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-text-secondary mb-1">AI Backend</label>
+                <select
+                  value={backend_id}
+                  onChange={(e) => setBackendId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+                >
+                  <option value="">Default (system fallback)</option>
+                  {backends.filter((b) => b.is_active).map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} ({b.type})
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="block text-sm text-text-secondary mb-1">Model Override</label>
                 <input

@@ -55,7 +55,7 @@ router.get('/', (req, res) => {
 // POST / — create expert
 router.post('/', (req, res) => {
   const userId = req.user!.id;
-  const { name, domain, description, personality_tone, system_prompt, model_override, memory_enabled } = req.body;
+  const { name, domain, description, personality_tone, system_prompt, backend_id, model_override, memory_enabled } = req.body;
 
   if (!name || !domain) {
     res.status(400).json({ error: 'Name and domain are required' });
@@ -63,9 +63,9 @@ router.post('/', (req, res) => {
   }
 
   const result = db.prepare(`
-    INSERT INTO experts (user_id, name, domain, description, personality_tone, system_prompt, model_override, memory_enabled)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(userId, name, domain, description || null, personality_tone || 'formal', system_prompt || null, model_override || null, memory_enabled ?? 1);
+    INSERT INTO experts (user_id, name, domain, description, personality_tone, system_prompt, backend_id, model_override, memory_enabled)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(userId, name, domain, description || null, personality_tone || 'formal', system_prompt || null, backend_id || null, model_override || null, memory_enabled ?? 1);
 
   const expertId = result.lastInsertRowid;
 
@@ -106,7 +106,7 @@ router.put('/:id', (req, res) => {
     return;
   }
 
-  const { name, domain, description, personality_tone, system_prompt, model_override, memory_enabled } = req.body;
+  const { name, domain, description, personality_tone, system_prompt, backend_id, model_override, memory_enabled } = req.body;
 
   db.prepare(`
     UPDATE experts SET
@@ -115,11 +115,12 @@ router.put('/:id', (req, res) => {
       description = ?,
       personality_tone = COALESCE(?, personality_tone),
       system_prompt = ?,
+      backend_id = ?,
       model_override = ?,
       memory_enabled = COALESCE(?, memory_enabled),
       updated_at = CURRENT_TIMESTAMP
     WHERE id = ? AND user_id = ?
-  `).run(name, domain, description, personality_tone, system_prompt, model_override, memory_enabled, req.params.id, req.user!.id);
+  `).run(name, domain, description, personality_tone, system_prompt, backend_id ?? null, model_override, memory_enabled, req.params.id, req.user!.id);
 
   const expert = db.prepare('SELECT * FROM experts WHERE id = ?').get(req.params.id);
   res.json({ expert });
