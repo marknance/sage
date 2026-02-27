@@ -6,6 +6,12 @@ const borderColors: Record<string, string> = {
   warning: 'border-l-warning',
 };
 
+const progressColors: Record<string, string> = {
+  success: 'bg-success',
+  error: 'bg-destructive',
+  warning: 'bg-warning',
+};
+
 export default function ToastContainer() {
   const { toasts, removeToast } = useToastStore();
 
@@ -16,15 +22,25 @@ export default function ToastContainer() {
       {toasts.map((t) => (
         <div
           key={t.id}
-          className={`bg-surface border border-border ${borderColors[t.type]} border-l-4 rounded-lg px-4 py-3 shadow-lg animate-slide-in-right flex items-start gap-2`}
+          className={`bg-surface border border-border ${borderColors[t.type]} border-l-4 rounded-lg shadow-lg animate-slide-in-right overflow-hidden`}
         >
-          <p className="text-sm text-text-primary flex-1">{t.message}</p>
-          <button
-            onClick={() => removeToast(t.id)}
-            className="text-text-muted hover:text-text-primary text-sm shrink-0"
-          >
-            &times;
-          </button>
+          <div className="px-4 py-3 flex items-start gap-2">
+            <p className="text-sm text-text-primary flex-1">{t.message}</p>
+            <button
+              onClick={() => removeToast(t.id)}
+              className="text-text-muted hover:text-text-primary text-sm shrink-0"
+            >
+              &times;
+            </button>
+          </div>
+          <div className="h-0.5 w-full bg-border">
+            <div
+              className={`h-full ${progressColors[t.type]} opacity-60`}
+              style={{
+                animation: `toast-progress ${t.duration}ms linear forwards`,
+              }}
+            />
+          </div>
         </div>
       ))}
     </div>

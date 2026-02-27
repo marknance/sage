@@ -6,7 +6,11 @@ export interface Toast {
   id: string;
   type: ToastType;
   message: string;
+  duration: number;
+  createdAt: number;
 }
+
+const MAX_TOASTS = 5;
 
 interface ToastState {
   toasts: Toast[];
@@ -19,10 +23,15 @@ export const useToastStore = create<ToastState>((set) => ({
 
   addToast: (type, message) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    set((s) => ({ toasts: [...s.toasts, { id, type, message }] }));
+    const duration = type === 'error' ? 6000 : 4000;
+    set((s) => {
+      const next = [...s.toasts, { id, type, message, duration, createdAt: Date.now() }];
+      // Keep only the most recent MAX_TOASTS
+      return { toasts: next.slice(-MAX_TOASTS) };
+    });
     setTimeout(() => {
       set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
-    }, 4000);
+    }, duration);
   },
 
   removeToast: (id) => {
