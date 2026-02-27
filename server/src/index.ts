@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 import Database, { type Database as DatabaseType } from 'better-sqlite3';
 import bcrypt from 'bcrypt';
 import authRouter from './routes/auth.js';
+import expertsRouter from './routes/experts.js';
+import categoriesRouter from './routes/categories.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -162,6 +164,8 @@ if (!existingAdmin) {
 
 // Auth routes
 app.use('/api/auth', authRouter);
+app.use('/api/experts', expertsRouter);
+app.use('/api/categories', categoriesRouter);
 
 // Health endpoint
 app.get('/api/health', (_req, res) => {

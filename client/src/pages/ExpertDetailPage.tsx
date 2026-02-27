@@ -1,0 +1,466 @@
+import { useEffect, useState, type FormEvent } from 'react';
+import { useParams, useNavigate, Link } from 'react-router';
+import { useExpertStore, type Behavior } from '../stores/expertStore';
+
+const TONE_OPTIONS = ['formal', 'casual', 'technical', 'friendly', 'concise'];
+
+const BEHAVIOR_LABELS: Record<string, string> = {
+  cite_sources: 'Cite Sources',
+  ask_clarifying_questions: 'Ask Clarifying Questions',
+  provide_examples: 'Provide Examples',
+  use_analogies: 'Use Analogies',
+  summarize_responses: 'Summarize Responses',
+};
+
+const MEMORY_TYPES = ['fact', 'preference', 'instruction', 'context'];
+
+export default function ExpertDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const {
+    currentExpert,
+    behaviors,
+    categories,
+    memories,
+    allCategories,
+    isLoading,
+    fetchExpert,
+    updateExpert,
+    deleteExpert,
+    updateBehaviors,
+    updateCategories,
+    fetchMemories,
+    addMemory,
+    deleteMemory,
+    clearMemories,
+    fetchAllCategories,
+  } = useExpertStore();
+
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    domain: '',
+    description: '',
+    personality_tone: 'formal',
+    system_prompt: '',
+    model_override: '',
+    memory_enabled: 1,
+  });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [memoryType, setMemoryType] = useState('fact');
+  const [memoryContent, setMemoryContent] = useState('');
+  const [addCategoryId, setAddCategoryId] = useState('');
+
+  const expertId = Number(id);
+
+  useEffect(() => {
+    if (id) {
+      fetchExpert(expertId);
+      fetchMemories(expertId);
+      fetchAllCategories();
+    }
+  }, [id, expertId, fetchExpert, fetchMemories, fetchAllCategories]);
+
+  useEffect(() => {
+    if (currentExpert) {
+      setEditForm({
+        name: currentExpert.name,
+        domain: currentExpert.domain,
+        description: currentExpert.description || '',
+        personality_tone: currentExpert.personality_tone,
+        system_prompt: currentExpert.system_prompt || '',
+        model_override: currentExpert.model_override || '',
+        memory_enabled: currentExpert.memory_enabled,
+      });
+    }
+  }, [currentExpert]);
+
+  async function handleSave() {
+    await updateExpert(expertId, {
+      ...editForm,
+      description: editForm.description || null,
+      system_prompt: editForm.system_prompt || null,
+      model_override: editForm.model_override || null,
+    } as any);
+    setEditing(false);
+  }
+
+  async function handleDelete() {
+    await deleteExpert(expertId);
+    navigate('/experts');
+  }
+
+  async function handleBehaviorToggle(b: Behavior) {
+    const updated = behaviors.map((bh) => ({
+      behavior_key: bh.behavior_key,
+      enabled: bh.id === b.id ? (b.enabled ? 0 : 1) : bh.enabled,
+    }));
+    await updateBehaviors(expertId, updated);
+  }
+
+  async function handleRemoveCategory(catId: number) {
+    const newIds = categories.filter((c) => c.id !== catId).map((c) => c.id);
+    await updateCategories(expertId, newIds);
+  }
+
+  async function handleAddCategory() {
+    if (!addCategoryId) return;
+    const newIds = [...categories.map((c) => c.id), Number(addCategoryId)];
+    await updateCategories(expertId, newIds);
+    setAddCategoryId('');
+  }
+
+  async function handleAddMemory(e: FormEvent) {
+    e.preventDefault();
+    if (!memoryContent.trim()) return;
+    await addMemory(expertId, memoryType, memoryContent.trim());
+    setMemoryContent('');
+  }
+
+  if (isLoading || !currentExpert) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <p className="text-text-secondary">Loading...</p>
+      </div>
+    );
+  }
+
+  const assignedCategoryIds = new Set(categories.map((c) => c.id));
+  const availableCategories = allCategories.filter((c) => !assignedCategoryIds.has(c.id));
+
+  return (
+    <div className="min-h-screen bg-background px-4 py-8">
+      <div className="max-w-2xl mx-auto space-y-6">
+        <div className="flex items-center gap-3">
+          <Link to="/experts" className="text-text-muted hover:text-text-primary transition-colors">
+            &larr; Back
+          </Link>
+          <h1 className="text-2xl font-semibold text-text-primary">{currentExpert.name}</h1>
+        </div>
+
+        {/* Expert Info Card */}
+        <div className="bg-surface rounded-xl border border-border p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-medium text-text-primary">Expert Info</h2>
+            <div className="flex gap-2">
+              {editing ? (
+                <>
+                  <button
+                    onClick={() => setEditing(false)}
+                    className="px-3 py-1 rounded-lg border border-border text-text-secondary text-sm hover:text-text-primary transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    className="px-3 py-1 rounded-lg bg-primary text-white text-sm hover:opacity-90 transition-opacity"
+                  >
+                    Save
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setEditing(true)}
+                    className="px-3 py-1 rounded-lg border border-border text-text-secondary text-sm hover:text-text-primary transition-colors"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="px-3 py-1 rounded-lg border border-destructive text-destructive text-sm hover:bg-destructive/10 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {showDeleteConfirm && (
+            <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+              <p className="text-sm text-text-primary mb-2">Delete this expert? This cannot be undone.</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleDelete}
+                  className="px-3 py-1 rounded-lg bg-destructive text-white text-sm"
+                >
+                  Confirm Delete
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="px-3 py-1 rounded-lg border border-border text-text-secondary text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {editing ? (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-text-secondary mb-1">Name</label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-text-secondary mb-1">Domain</label>
+                <input
+                  type="text"
+                  value={editForm.domain}
+                  onChange={(e) => setEditForm((f) => ({ ...f, domain: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-text-secondary mb-1">Description</label>
+                <textarea
+                  value={editForm.description}
+                  onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
+                  rows={3}
+                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary resize-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-text-secondary mb-1">Tone</label>
+                <select
+                  value={editForm.personality_tone}
+                  onChange={(e) => setEditForm((f) => ({ ...f, personality_tone: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+                >
+                  {TONE_OPTIONS.map((t) => (
+                    <option key={t} value={t}>
+                      {t.charAt(0).toUpperCase() + t.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-text-secondary mb-1">System Prompt</label>
+                <textarea
+                  value={editForm.system_prompt}
+                  onChange={(e) => setEditForm((f) => ({ ...f, system_prompt: e.target.value }))}
+                  rows={4}
+                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary resize-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-text-secondary mb-1">Model Override</label>
+                <input
+                  type="text"
+                  value={editForm.model_override}
+                  onChange={(e) => setEditForm((f) => ({ ...f, model_override: e.target.value }))}
+                  placeholder="Leave blank for default"
+                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+                />
+              </div>
+              <label className="flex items-center justify-between cursor-pointer">
+                <span className="text-text-primary">Memory Enabled</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={!!editForm.memory_enabled}
+                  onClick={() => setEditForm((f) => ({ ...f, memory_enabled: f.memory_enabled ? 0 : 1 }))}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${
+                    editForm.memory_enabled ? 'bg-primary' : 'bg-border'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
+                      editForm.memory_enabled ? 'translate-x-5' : ''
+                    }`}
+                  />
+                </button>
+              </label>
+            </div>
+          ) : (
+            <dl className="space-y-3">
+              <div>
+                <dt className="text-sm text-text-muted">Domain</dt>
+                <dd className="text-text-primary">{currentExpert.domain}</dd>
+              </div>
+              {currentExpert.description && (
+                <div>
+                  <dt className="text-sm text-text-muted">Description</dt>
+                  <dd className="text-text-primary">{currentExpert.description}</dd>
+                </div>
+              )}
+              <div>
+                <dt className="text-sm text-text-muted">Tone</dt>
+                <dd className="text-text-primary capitalize">{currentExpert.personality_tone}</dd>
+              </div>
+              {currentExpert.system_prompt && (
+                <div>
+                  <dt className="text-sm text-text-muted">System Prompt</dt>
+                  <dd className="text-text-primary text-sm whitespace-pre-wrap">{currentExpert.system_prompt}</dd>
+                </div>
+              )}
+              {currentExpert.model_override && (
+                <div>
+                  <dt className="text-sm text-text-muted">Model Override</dt>
+                  <dd className="text-text-primary">{currentExpert.model_override}</dd>
+                </div>
+              )}
+              <div>
+                <dt className="text-sm text-text-muted">Memory</dt>
+                <dd className="text-text-primary">{currentExpert.memory_enabled ? 'Enabled' : 'Disabled'}</dd>
+              </div>
+            </dl>
+          )}
+        </div>
+
+        {/* Behaviors Card */}
+        <div className="bg-surface rounded-xl border border-border p-6">
+          <h2 className="text-lg font-medium text-text-primary mb-4">Behaviors</h2>
+          <div className="space-y-3">
+            {behaviors.map((b) => (
+              <label key={b.id} className="flex items-center justify-between cursor-pointer">
+                <span className="text-text-primary">{BEHAVIOR_LABELS[b.behavior_key] || b.behavior_key}</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={!!b.enabled}
+                  onClick={() => handleBehaviorToggle(b)}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${
+                    b.enabled ? 'bg-primary' : 'bg-border'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
+                      b.enabled ? 'translate-x-5' : ''
+                    }`}
+                  />
+                </button>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Categories Card */}
+        <div className="bg-surface rounded-xl border border-border p-6">
+          <h2 className="text-lg font-medium text-text-primary mb-4">Categories</h2>
+          {categories.length > 0 ? (
+            <div className="flex flex-wrap gap-2 mb-4">
+              {categories.map((c) => (
+                <span
+                  key={c.id}
+                  className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm"
+                >
+                  {c.name}
+                  <button
+                    onClick={() => handleRemoveCategory(c.id)}
+                    className="ml-1 text-primary/60 hover:text-primary"
+                  >
+                    &times;
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-text-muted mb-4">No categories assigned.</p>
+          )}
+          {availableCategories.length > 0 && (
+            <div className="flex gap-2">
+              <select
+                value={addCategoryId}
+                onChange={(e) => setAddCategoryId(e.target.value)}
+                className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+              >
+                <option value="">Select category...</option>
+                {availableCategories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleAddCategory}
+                disabled={!addCategoryId}
+                className="px-4 py-2 rounded-lg bg-primary text-white text-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                Add
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Memories Card */}
+        <div className="bg-surface rounded-xl border border-border p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-medium text-text-primary">Memories</h2>
+            {memories.length > 0 && (
+              <button
+                onClick={() => clearMemories(expertId)}
+                className="text-sm text-destructive hover:underline"
+              >
+                Clear All
+              </button>
+            )}
+          </div>
+
+          <form onSubmit={handleAddMemory} className="flex gap-2 mb-4">
+            <select
+              value={memoryType}
+              onChange={(e) => setMemoryType(e.target.value)}
+              className="px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+            >
+              {MEMORY_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={memoryContent}
+              onChange={(e) => setMemoryContent(e.target.value)}
+              placeholder="Memory content..."
+              className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-text-primary focus:outline-none focus:border-primary"
+            />
+            <button
+              type="submit"
+              disabled={!memoryContent.trim()}
+              className="px-4 py-2 rounded-lg bg-primary text-white text-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              Add
+            </button>
+          </form>
+
+          {memories.length === 0 ? (
+            <p className="text-sm text-text-muted">No memories yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {memories.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-start justify-between gap-3 p-3 rounded-lg bg-background border border-border"
+                >
+                  <div className="flex-1 min-w-0">
+                    <span className="inline-block px-2 py-0.5 rounded text-xs bg-primary/10 text-primary mb-1">
+                      {m.memory_type}
+                    </span>
+                    <p className="text-sm text-text-primary">{m.content}</p>
+                    <p className="text-xs text-text-muted mt-1">
+                      {new Date(m.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => deleteMemory(expertId, m.id)}
+                    className="text-text-muted hover:text-destructive text-sm flex-shrink-0"
+                  >
+                    &times;
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

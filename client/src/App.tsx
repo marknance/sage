@@ -4,6 +4,9 @@ import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
+import ExpertsPage from './pages/ExpertsPage';
+import ExpertCreatePage from './pages/ExpertCreatePage';
+import ExpertDetailPage from './pages/ExpertDetailPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,8 +28,11 @@ function App() {
 
           {/* Protected routes */}
           <Route element={<ProtectedRoute />}>
+            <Route path="/experts" element={<ExpertsPage />} />
+            <Route path="/experts/new" element={<ExpertCreatePage />} />
+            <Route path="/experts/:id" element={<ExpertDetailPage />} />
             <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/" element={<Navigate to="/profile" replace />} />
+            <Route path="/" element={<Navigate to="/experts" replace />} />
           </Route>
 
           {/* Admin routes (stub) */}

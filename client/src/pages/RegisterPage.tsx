@@ -23,7 +23,7 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await register(username, email, password);
-      navigate('/profile');
+      navigate('/experts');
     } catch (err: any) {
       setError(err.message || 'Registration failed');
     } finally {
