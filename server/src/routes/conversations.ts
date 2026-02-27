@@ -312,8 +312,9 @@ router.post('/:id/messages/stream', async (req, res) => {
 
       const history = db.prepare('SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at ASC')
         .all(req.params.id) as { role: string; content: string }[];
+      const docContext = getDocumentContext(req.params.id);
       const messages = [
-        { role: 'system' as const, content: 'You are a helpful AI assistant.' },
+        { role: 'system' as const, content: 'You are a helpful AI assistant.' + docContext },
         ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
       ];
 
@@ -452,8 +453,9 @@ router.post('/:id/messages', async (req, res) => {
 
     if (assignedExperts.length === 0) {
       // No experts — default assistant response
+      const docContext = getDocumentContext(req.params.id);
       const messages = [
-        { role: 'system' as const, content: 'You are a helpful AI assistant.' },
+        { role: 'system' as const, content: 'You are a helpful AI assistant.' + docContext },
         ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
       ];
 
@@ -534,7 +536,7 @@ async function getExpertResponse(
     : [];
   const memories = memoriesRows.map((m) => m.content);
 
-  const systemPrompt = buildSystemPrompt(expert, enabledBehaviors, memories);
+  const systemPrompt = buildSystemPrompt(expert, enabledBehaviors, memories) + getDocumentContext(conversationId);
 
   const messages = [
     { role: 'system' as const, content: systemPrompt },
@@ -570,7 +572,7 @@ function getExpertResponseStream(
     : [];
   const memories = memoriesRows.map((m) => m.content);
 
-  const systemPrompt = buildSystemPrompt(expert, enabledBehaviors, memories);
+  const systemPrompt = buildSystemPrompt(expert, enabledBehaviors, memories) + getDocumentContext(conversationId);
 
   const messages = [
     { role: 'system' as const, content: systemPrompt },
@@ -584,6 +586,15 @@ function getExpertResponseStream(
   const model = expert.conv_model_override || expert.model_override || undefined;
 
   return chatCompletionStream({ messages, model, backend, signal });
+}
+
+function getDocumentContext(conversationId: string): string {
+  const docs = db.prepare(
+    'SELECT filename, extracted_text FROM documents WHERE conversation_id = ? AND extracted_text IS NOT NULL'
+  ).all(conversationId) as { filename: string; extracted_text: string }[];
+  if (docs.length === 0) return '';
+  const parts = docs.map((d) => `[Document: ${d.filename}]\n${d.extracted_text}`);
+  return '\n\nReference documents:\n' + parts.join('\n\n');
 }
 
 function findSuggestedExperts(userId: number, messageContent: string, excludeExperts: any[]): any[] {
@@ -613,10 +624,24 @@ router.post('/:id/documents', upload.single('file'), (req, res) => {
     return;
   }
 
+  // Extract text for supported file types
+  const textExtensions = ['.txt', '.md', '.csv', '.json', '.xml', '.html', '.log'];
+  const ext = path.extname(req.file.originalname).toLowerCase();
+  let extractedText: string | null = null;
+  if (textExtensions.includes(ext)) {
+    try {
+      const filePath = path.join(uploadsDir, req.file.filename);
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      extractedText = raw.slice(0, 10_000);
+    } catch {
+      // Extraction failed — leave null
+    }
+  }
+
   const result = db.prepare(`
-    INSERT INTO documents (conversation_id, filename, file_type, file_path, file_size)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(req.params.id, req.file.originalname, req.file.mimetype, req.file.filename, req.file.size);
+    INSERT INTO documents (conversation_id, filename, file_type, file_path, file_size, extracted_text)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(req.params.id, req.file.originalname, req.file.mimetype, req.file.filename, req.file.size, extractedText);
 
   const document = db.prepare('SELECT * FROM documents WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json({ document });
