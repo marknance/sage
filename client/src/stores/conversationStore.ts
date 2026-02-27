@@ -33,6 +33,7 @@ export interface Document {
   file_type: string;
   file_path: string;
   file_size: number | null;
+  extracted_text?: string | null;
   created_at: string;
 }
 

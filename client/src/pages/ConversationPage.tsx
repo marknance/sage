@@ -134,6 +134,7 @@ export default function ConversationPage() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [modelsMap, setModelsMap] = useState<Record<string, string[]>>({});
+  const [previewDoc, setPreviewDoc] = useState<{ filename: string; text: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
@@ -467,19 +468,39 @@ export default function ConversationPage() {
               {documents.length > 0 && (
                 <div className="space-y-2 mb-4">
                   {documents.map((doc) => (
-                    <div key={doc.id} className="flex items-center justify-between bg-background rounded-lg px-3 py-2.5">
-                      <div className="min-w-0">
-                        <p className="text-sm text-text-primary truncate">{doc.filename}</p>
-                        <p className="text-xs text-text-muted">
-                          {doc.file_size ? `${(doc.file_size / 1024).toFixed(1)} KB` : ''}
-                        </p>
+                    <div key={doc.id} className="bg-background rounded-lg px-3 py-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="min-w-0">
+                          <p className="text-sm text-text-primary truncate">{doc.filename}</p>
+                          <p className="text-xs text-text-muted">
+                            {doc.file_size ? `${(doc.file_size / 1024).toFixed(1)} KB` : ''}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          <a
+                            href={`/api/conversations/${convId}/documents/${doc.id}/download`}
+                            className="text-text-muted hover:text-primary text-xs transition-colors"
+                            title="Download"
+                          >
+                            DL
+                          </a>
+                          {doc.extracted_text && (
+                            <button
+                              onClick={() => setPreviewDoc({ filename: doc.filename, text: doc.extracted_text! })}
+                              className="text-text-muted hover:text-primary text-xs transition-colors"
+                              title="Preview"
+                            >
+                              View
+                            </button>
+                          )}
+                          <button
+                            onClick={() => deleteDocument(convId, doc.id)}
+                            className="text-text-muted hover:text-red-400 text-xs transition-colors"
+                          >
+                            Del
+                          </button>
+                        </div>
                       </div>
-                      <button
-                        onClick={() => deleteDocument(convId, doc.id)}
-                        className="text-text-muted hover:text-red-400 text-xs transition-colors shrink-0 ml-2"
-                      >
-                        Delete
-                      </button>
                     </div>
                   ))}
                 </div>
@@ -499,6 +520,19 @@ export default function ConversationPage() {
           </div>
         )}
       </div>
+
+      {/* Document Preview Modal */}
+      {previewDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setPreviewDoc(null)}>
+          <div className="bg-surface border border-border rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-text-primary truncate">{previewDoc.filename}</h3>
+              <button onClick={() => setPreviewDoc(null)} className="text-text-muted hover:text-text-primary text-sm">Close</button>
+            </div>
+            <pre className="flex-1 overflow-auto text-sm text-text-secondary bg-background rounded-lg p-4 whitespace-pre-wrap">{previewDoc.text}</pre>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

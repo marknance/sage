@@ -695,6 +695,33 @@ router.post('/:id/documents', upload.single('file'), (req, res) => {
   res.status(201).json({ document });
 });
 
+// GET /:id/documents/:docId/download — download document
+router.get('/:id/documents/:docId/download', (req, res) => {
+  const conversation = db.prepare('SELECT id FROM conversations WHERE id = ? AND user_id = ?')
+    .get(req.params.id, req.user!.id);
+  if (!conversation) {
+    res.status(404).json({ error: 'Conversation not found' });
+    return;
+  }
+
+  const doc = db.prepare('SELECT * FROM documents WHERE id = ? AND conversation_id = ?')
+    .get(req.params.docId, req.params.id) as any;
+  if (!doc) {
+    res.status(404).json({ error: 'Document not found' });
+    return;
+  }
+
+  const filePath = path.join(uploadsDir, doc.file_path);
+  if (!fs.existsSync(filePath)) {
+    res.status(404).json({ error: 'File not found on disk' });
+    return;
+  }
+
+  res.setHeader('Content-Disposition', `attachment; filename="${doc.filename}"`);
+  res.setHeader('Content-Type', doc.file_type || 'application/octet-stream');
+  fs.createReadStream(filePath).pipe(res);
+});
+
 // DELETE /:id/documents/:docId — delete document
 router.delete('/:id/documents/:docId', (req, res) => {
   const conversation = db.prepare('SELECT id FROM conversations WHERE id = ? AND user_id = ?')
