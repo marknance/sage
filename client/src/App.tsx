@@ -7,6 +7,8 @@ import ProfilePage from './pages/ProfilePage';
 import ExpertsPage from './pages/ExpertsPage';
 import ExpertCreatePage from './pages/ExpertCreatePage';
 import ExpertDetailPage from './pages/ExpertDetailPage';
+import ConversationsPage from './pages/ConversationsPage';
+import ConversationPage from './pages/ConversationPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,11 +30,13 @@ function App() {
 
           {/* Protected routes */}
           <Route element={<ProtectedRoute />}>
+            <Route path="/conversations" element={<ConversationsPage />} />
+            <Route path="/conversations/:id" element={<ConversationPage />} />
             <Route path="/experts" element={<ExpertsPage />} />
             <Route path="/experts/new" element={<ExpertCreatePage />} />
             <Route path="/experts/:id" element={<ExpertDetailPage />} />
             <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/" element={<Navigate to="/experts" replace />} />
+            <Route path="/" element={<Navigate to="/conversations" replace />} />
           </Route>
 
           {/* Admin routes (stub) */}

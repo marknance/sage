@@ -5,9 +5,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Database, { type Database as DatabaseType } from 'better-sqlite3';
 import bcrypt from 'bcrypt';
+import fs from 'node:fs';
 import authRouter from './routes/auth.js';
 import expertsRouter from './routes/experts.js';
 import categoriesRouter from './routes/categories.js';
+import conversationsRouter from './routes/conversations.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -162,10 +164,17 @@ if (!existingAdmin) {
   console.log('Seeded admin user: admin@sage.local / admin123');
 }
 
-// Auth routes
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, '..', 'data', 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// API routes
 app.use('/api/auth', authRouter);
 app.use('/api/experts', expertsRouter);
 app.use('/api/categories', categoriesRouter);
+app.use('/api/conversations', conversationsRouter);
 
 // Health endpoint
 app.get('/api/health', (_req, res) => {
