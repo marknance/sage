@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import { useConversationStore } from '../stores/conversationStore';
 
 export default function ConversationsPage() {
-  const { conversations, total, limit, offset, isLoading, fetchConversations, createConversation, togglePin } = useConversationStore();
+  const { conversations, total, limit, offset, isLoading, fetchConversations, createConversation, togglePin, bulkDeleteConversations } = useConversationStore();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('recent');
@@ -20,6 +20,8 @@ export default function ConversationsPage() {
   }, []);
   const [filterType, setFilterType] = useState('');
   const [pinnedOnly, setPinnedOnly] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     setPage(0); // reset page on filter change
@@ -45,22 +47,55 @@ export default function ConversationsPage() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-semibold text-text-primary">Conversations</h1>
           <div className="flex gap-3 items-center">
-            <select
-              value={newType}
-              onChange={(e) => setNewType(e.target.value)}
-              className="px-3 py-2 rounded-lg bg-surface border border-border text-text-primary text-sm focus:outline-none focus:border-primary"
-            >
-              <option value="standard">Standard</option>
-              <option value="research">Research</option>
-              <option value="brainstorm">Brainstorm</option>
-              <option value="debug">Debug</option>
-            </select>
-            <button
-              onClick={handleNew}
-              className="px-4 py-2 rounded-lg bg-primary text-white font-medium hover:opacity-90 transition-opacity"
-            >
-              New Conversation
-            </button>
+            {selectMode ? (
+              <>
+                <span className="text-sm text-text-secondary">{selected.size} selected</span>
+                <button
+                  onClick={async () => {
+                    if (selected.size === 0) return;
+                    if (!confirm(`Delete ${selected.size} conversation${selected.size !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+                    await bulkDeleteConversations(Array.from(selected));
+                    setSelected(new Set());
+                    setSelectMode(false);
+                  }}
+                  disabled={selected.size === 0}
+                  className="px-4 py-2 rounded-lg bg-destructive text-white font-medium hover:opacity-90 disabled:opacity-50 transition-opacity text-sm"
+                >
+                  Delete Selected
+                </button>
+                <button
+                  onClick={() => { setSelectMode(false); setSelected(new Set()); }}
+                  className="px-4 py-2 rounded-lg border border-border text-text-secondary text-sm hover:text-text-primary transition-colors"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setSelectMode(true)}
+                  className="px-3 py-2 rounded-lg border border-border text-text-secondary text-sm hover:text-text-primary transition-colors"
+                >
+                  Select
+                </button>
+                <select
+                  value={newType}
+                  onChange={(e) => setNewType(e.target.value)}
+                  className="px-3 py-2 rounded-lg bg-surface border border-border text-text-primary text-sm focus:outline-none focus:border-primary"
+                >
+                  <option value="standard">Standard</option>
+                  <option value="research">Research</option>
+                  <option value="brainstorm">Brainstorm</option>
+                  <option value="debug">Debug</option>
+                </select>
+                <button
+                  onClick={handleNew}
+                  className="px-4 py-2 rounded-lg bg-primary text-white font-medium hover:opacity-90 transition-opacity"
+                >
+                  New Conversation
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -126,34 +161,75 @@ export default function ConversationsPage() {
                   conv.is_pinned ? 'border-primary/30' : 'border-border'
                 }`}
               >
-                <button
-                  onClick={(e) => { e.preventDefault(); togglePin(conv.id); }}
-                  className={`absolute top-2 right-2 text-sm z-10 p-1 rounded hover:bg-background transition-colors ${
-                    conv.is_pinned ? 'text-primary' : 'text-text-muted opacity-0 group-hover:opacity-100'
-                  }`}
-                  title={conv.is_pinned ? 'Unpin' : 'Pin'}
-                  style={conv.is_pinned ? {} : { opacity: 0.4 }}
-                >
-                  {conv.is_pinned ? '\uD83D\uDCCC' : '\uD83D\uDCCC'}
-                </button>
-                <Link
-                  to={`/conversations/${conv.id}`}
-                  className="block"
-                >
-                <div className="flex items-start justify-between mb-2 pr-6">
-                  <h3 className="text-lg font-medium text-text-primary line-clamp-1">{conv.title}</h3>
-                  <span className="ml-2 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs shrink-0">
-                    {conv.type}
-                  </span>
-                </div>
-                {conv.last_message && (
-                  <p className="text-sm text-text-muted mb-3 line-clamp-2">{conv.last_message}</p>
+                {selectMode ? (
+                  <input
+                    type="checkbox"
+                    checked={selected.has(conv.id)}
+                    onChange={() => {
+                      setSelected((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(conv.id)) next.delete(conv.id);
+                        else next.add(conv.id);
+                        return next;
+                      });
+                    }}
+                    className="absolute top-3 right-3 z-10 w-4 h-4 accent-primary"
+                  />
+                ) : (
+                  <button
+                    onClick={(e) => { e.preventDefault(); togglePin(conv.id); }}
+                    className={`absolute top-2 right-2 text-sm z-10 p-1 rounded hover:bg-background transition-colors ${
+                      conv.is_pinned ? 'text-primary' : 'text-text-muted opacity-0 group-hover:opacity-100'
+                    }`}
+                    title={conv.is_pinned ? 'Unpin' : 'Pin'}
+                    style={conv.is_pinned ? {} : { opacity: 0.4 }}
+                  >
+                    {conv.is_pinned ? '\uD83D\uDCCC' : '\uD83D\uDCCC'}
+                  </button>
                 )}
-                <div className="flex items-center justify-between text-xs text-text-muted">
-                  <span>{conv.expert_count || 0} expert{conv.expert_count !== 1 ? 's' : ''} &middot; {conv.message_count || 0} msg{conv.message_count !== 1 ? 's' : ''}</span>
-                  <span>{new Date(conv.updated_at).toLocaleDateString()}</span>
-                </div>
-                </Link>
+                {selectMode ? (
+                  <div
+                    className="block cursor-pointer"
+                    onClick={() => {
+                      setSelected((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(conv.id)) next.delete(conv.id);
+                        else next.add(conv.id);
+                        return next;
+                      });
+                    }}
+                  >
+                    <div className="flex items-start justify-between mb-2 pr-6">
+                      <h3 className="text-lg font-medium text-text-primary line-clamp-1">{conv.title}</h3>
+                      <span className="ml-2 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs shrink-0">
+                        {conv.type}
+                      </span>
+                    </div>
+                    {conv.last_message && (
+                      <p className="text-sm text-text-muted mb-3 line-clamp-2">{conv.last_message}</p>
+                    )}
+                    <div className="flex items-center justify-between text-xs text-text-muted">
+                      <span>{conv.expert_count || 0} expert{conv.expert_count !== 1 ? 's' : ''} &middot; {conv.message_count || 0} msg{conv.message_count !== 1 ? 's' : ''}</span>
+                      <span>{new Date(conv.updated_at).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <Link to={`/conversations/${conv.id}`} className="block">
+                    <div className="flex items-start justify-between mb-2 pr-6">
+                      <h3 className="text-lg font-medium text-text-primary line-clamp-1">{conv.title}</h3>
+                      <span className="ml-2 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs shrink-0">
+                        {conv.type}
+                      </span>
+                    </div>
+                    {conv.last_message && (
+                      <p className="text-sm text-text-muted mb-3 line-clamp-2">{conv.last_message}</p>
+                    )}
+                    <div className="flex items-center justify-between text-xs text-text-muted">
+                      <span>{conv.expert_count || 0} expert{conv.expert_count !== 1 ? 's' : ''} &middot; {conv.message_count || 0} msg{conv.message_count !== 1 ? 's' : ''}</span>
+                      <span>{new Date(conv.updated_at).toLocaleDateString()}</span>
+                    </div>
+                  </Link>
+                )}
               </div>
             ))}
           </div>

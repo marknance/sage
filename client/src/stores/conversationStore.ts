@@ -61,6 +61,7 @@ interface ConversationState {
   createConversation: (title?: string, type?: string) => Promise<Conversation>;
   updateConversation: (id: number, data: Partial<Conversation>) => Promise<void>;
   deleteConversation: (id: number) => Promise<void>;
+  bulkDeleteConversations: (ids: number[]) => Promise<void>;
   sendMessage: (id: number, content: string) => Promise<void>;
   sendMessageStream: (id: number, content: string) => Promise<void>;
   assignExpert: (conversationId: number, expertId: number) => Promise<void>;
@@ -155,6 +156,18 @@ export const useConversationStore = create<ConversationState>((set) => ({
       currentConversation: null,
     }));
     toast.success('Conversation deleted');
+  },
+
+  bulkDeleteConversations: async (ids) => {
+    const { deleted } = await api<{ deleted: number }>('/api/conversations/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    });
+    set((s) => ({
+      conversations: s.conversations.filter((c) => !ids.includes(c.id)),
+      total: s.total - deleted,
+    }));
+    toast.success(`${deleted} conversation${deleted !== 1 ? 's' : ''} deleted`);
   },
 
   togglePin: async (id) => {

@@ -245,6 +245,23 @@ router.delete('/:id', (req, res) => {
   res.json({ message: 'Conversation deleted' });
 });
 
+// POST /bulk-delete — delete multiple conversations
+router.post('/bulk-delete', (req, res) => {
+  const userId = req.user!.id;
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    res.status(400).json({ error: 'ids must be a non-empty array' });
+    return;
+  }
+
+  const placeholders = ids.map(() => '?').join(',');
+  const result = db.prepare(
+    `DELETE FROM conversations WHERE id IN (${placeholders}) AND user_id = ?`
+  ).run(...ids, userId);
+
+  res.json({ deleted: result.changes });
+});
+
 // PATCH /:id/pin — toggle pinned status
 router.patch('/:id/pin', (req, res) => {
   const conversation = db.prepare('SELECT id, is_pinned FROM conversations WHERE id = ? AND user_id = ?')
