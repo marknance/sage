@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { useExpertStore } from '../stores/expertStore';
+import ImportExpertModal from '../components/ImportExpertModal';
 
 export default function ExpertsPage() {
   const { experts, isLoading, fetchExperts, fetchAllCategories, allCategories } = useExpertStore();
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [sort, setSort] = useState('recent');
+  const [showImport, setShowImport] = useState(false);
 
   useEffect(() => {
     fetchExperts({ search: search || undefined, category: category || undefined, sort });
@@ -32,6 +35,12 @@ export default function ExpertsPage() {
             >
               Profile
             </Link>
+            <button
+              onClick={() => setShowImport(true)}
+              className="px-4 py-2 rounded-lg border border-border text-text-secondary hover:text-text-primary transition-colors"
+            >
+              Import Expert
+            </button>
             <Link
               to="/experts/new"
               className="px-4 py-2 rounded-lg bg-primary text-white font-medium hover:opacity-90 transition-opacity"
@@ -122,6 +131,16 @@ export default function ExpertsPage() {
           </div>
         )}
       </div>
+
+      {showImport && (
+        <ImportExpertModal
+          onClose={() => setShowImport(false)}
+          onImported={(id) => {
+            setShowImport(false);
+            navigate(`/experts/${id}`);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -67,6 +67,8 @@ interface ExpertState {
   fetchAllCategories: () => Promise<void>;
   createCategory: (name: string) => Promise<Category>;
   deleteCategory: (id: number) => Promise<void>;
+  exportExpert: (id: number) => Promise<void>;
+  importExpert: (data: any, strategy: 'skip' | 'rename' | 'overwrite') => Promise<Expert>;
 }
 
 export const useExpertStore = create<ExpertState>((set, get) => ({
@@ -190,5 +192,26 @@ export const useExpertStore = create<ExpertState>((set, get) => ({
   deleteCategory: async (id) => {
     await api(`/api/categories/${id}`, { method: 'DELETE' });
     set((s) => ({ allCategories: s.allCategories.filter((c) => c.id !== id) }));
+  },
+
+  exportExpert: async (id) => {
+    const data = await api<any>(`/api/experts/${id}/export`);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${data.name.replace(/[^a-zA-Z0-9_-]/g, '_')}.sage-expert.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Expert exported');
+  },
+
+  importExpert: async (data, strategy) => {
+    const { expert } = await api<{ expert: Expert }>('/api/experts/import', {
+      method: 'POST',
+      body: JSON.stringify({ data, strategy }),
+    });
+    toast.success(`Expert "${expert.name}" imported`);
+    return expert;
   },
 }));

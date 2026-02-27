@@ -309,4 +309,123 @@ router.delete('/:id/memories', (req, res) => {
   res.json({ message: 'All memories cleared' });
 });
 
+// GET /:id/export — export expert as JSON
+router.get('/:id/export', (req, res) => {
+  const expert = db.prepare('SELECT * FROM experts WHERE id = ? AND user_id = ?')
+    .get(req.params.id, req.user!.id) as any;
+  if (!expert) {
+    res.status(404).json({ error: 'Expert not found' });
+    return;
+  }
+
+  const behaviors = db.prepare('SELECT behavior_key, enabled FROM expert_behaviors WHERE expert_id = ?')
+    .all(req.params.id) as { behavior_key: string; enabled: number }[];
+  const categories = db.prepare(`
+    SELECT ec.name FROM expert_categories ec
+    JOIN expert_category_map ecm ON ecm.category_id = ec.id
+    WHERE ecm.expert_id = ?
+  `).all(req.params.id) as { name: string }[];
+  const memories = db.prepare('SELECT memory_type, content FROM expert_memories WHERE expert_id = ?')
+    .all(req.params.id) as { memory_type: string; content: string }[];
+
+  res.json({
+    sage_export_version: 1,
+    name: expert.name,
+    domain: expert.domain,
+    description: expert.description,
+    personality_tone: expert.personality_tone,
+    system_prompt: expert.system_prompt,
+    model_override: expert.model_override,
+    memory_enabled: expert.memory_enabled,
+    behaviors,
+    categories: categories.map((c) => c.name),
+    memories,
+  });
+});
+
+// POST /import — import expert from JSON
+router.post('/import', (req, res) => {
+  const userId = req.user!.id;
+  const { data, strategy } = req.body as { data: any; strategy: 'skip' | 'rename' | 'overwrite' };
+
+  if (!data || !data.name || !data.domain) {
+    res.status(400).json({ error: 'Invalid export data: name and domain required' });
+    return;
+  }
+
+  // Check for existing expert with same name
+  const existing = db.prepare('SELECT id FROM experts WHERE name = ? AND user_id = ?')
+    .get(data.name, userId) as { id: number } | undefined;
+
+  if (existing && strategy === 'skip') {
+    res.json({ message: 'Skipped — expert already exists', expert_id: existing.id });
+    return;
+  }
+
+  const tx = db.transaction(() => {
+    let expertId: number;
+
+    if (existing && strategy === 'overwrite') {
+      // Update existing
+      db.prepare(`
+        UPDATE experts SET domain = ?, description = ?, personality_tone = ?,
+          system_prompt = ?, model_override = ?, memory_enabled = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(data.domain, data.description || null, data.personality_tone || 'formal',
+        data.system_prompt || null, data.model_override || null, data.memory_enabled ?? 1, existing.id);
+      expertId = existing.id;
+      // Clear old behaviors and memories for overwrite
+      db.prepare('DELETE FROM expert_behaviors WHERE expert_id = ?').run(expertId);
+      db.prepare('DELETE FROM expert_memories WHERE expert_id = ?').run(expertId);
+    } else {
+      // Create new (rename if needed)
+      const name = existing ? `${data.name} (imported)` : data.name;
+      const result = db.prepare(`
+        INSERT INTO experts (user_id, name, domain, description, personality_tone, system_prompt, model_override, memory_enabled)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(userId, name, data.domain, data.description || null, data.personality_tone || 'formal',
+        data.system_prompt || null, data.model_override || null, data.memory_enabled ?? 1);
+      expertId = result.lastInsertRowid as number;
+    }
+
+    // Import behaviors
+    if (Array.isArray(data.behaviors)) {
+      const upsert = db.prepare(`
+        INSERT INTO expert_behaviors (expert_id, behavior_key, enabled)
+        VALUES (?, ?, ?) ON CONFLICT(expert_id, behavior_key) DO UPDATE SET enabled = excluded.enabled
+      `);
+      for (const b of data.behaviors) {
+        upsert.run(expertId, b.behavior_key, b.enabled ?? 0);
+      }
+    }
+
+    // Import category assignments (create categories if they don't exist)
+    if (Array.isArray(data.categories)) {
+      for (const catName of data.categories) {
+        let cat = db.prepare('SELECT id FROM expert_categories WHERE name = ? AND user_id = ?')
+          .get(catName, userId) as { id: number } | undefined;
+        if (!cat) {
+          const r = db.prepare('INSERT INTO expert_categories (user_id, name) VALUES (?, ?)').run(userId, catName);
+          cat = { id: r.lastInsertRowid as number };
+        }
+        db.prepare('INSERT OR IGNORE INTO expert_category_map (expert_id, category_id) VALUES (?, ?)').run(expertId, cat.id);
+      }
+    }
+
+    // Import memories
+    if (Array.isArray(data.memories)) {
+      const ins = db.prepare('INSERT INTO expert_memories (expert_id, memory_type, content) VALUES (?, ?, ?)');
+      for (const m of data.memories) {
+        ins.run(expertId, m.memory_type, m.content);
+      }
+    }
+
+    return expertId;
+  });
+
+  const expertId = tx();
+  const expert = db.prepare('SELECT * FROM experts WHERE id = ?').get(expertId);
+  res.status(201).json({ expert });
+});
+
 export default router;
