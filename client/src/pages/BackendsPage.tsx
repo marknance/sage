@@ -25,24 +25,6 @@ export default function BackendsPage() {
           <h1 className="text-2xl font-semibold text-text-primary">AI Backends</h1>
           <div className="flex gap-3">
             <Link
-              to="/conversations"
-              className="px-4 py-2 rounded-lg border border-border text-text-secondary hover:text-text-primary transition-colors"
-            >
-              Conversations
-            </Link>
-            <Link
-              to="/experts"
-              className="px-4 py-2 rounded-lg border border-border text-text-secondary hover:text-text-primary transition-colors"
-            >
-              Experts
-            </Link>
-            <Link
-              to="/profile"
-              className="px-4 py-2 rounded-lg border border-border text-text-secondary hover:text-text-primary transition-colors"
-            >
-              Profile
-            </Link>
-            <Link
               to="/backends/new"
               className="px-4 py-2 rounded-lg bg-primary text-white font-medium hover:opacity-90 transition-opacity"
             >

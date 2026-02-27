@@ -79,11 +79,6 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-background px-4 py-12">
       <div className="max-w-md mx-auto space-y-6">
-        {/* Nav */}
-        <div className="flex gap-3">
-          <Link to="/conversations" className="text-text-muted hover:text-text-primary transition-colors">&larr; Back</Link>
-        </div>
-
         {/* User Info */}
         <div className="bg-surface rounded-xl border border-border p-6">
           <h1 className="text-2xl font-semibold text-text-primary mb-4">Profile</h1>

@@ -229,13 +229,10 @@ export default function ConversationPage() {
   }
 
   return (
-    <div className="h-screen bg-background flex flex-col">
+    <div className="h-[calc(100vh-3.5rem)] bg-background flex flex-col">
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-surface shrink-0">
         <div className="flex items-center gap-3">
-          <Link to="/conversations" className="text-text-muted hover:text-text-primary transition-colors">
-            &larr; Back
-          </Link>
           {editingTitle ? (
             <input
               autoFocus

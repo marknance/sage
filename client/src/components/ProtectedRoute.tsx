@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Outlet, Navigate } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
+import NavBar from './NavBar';
 
 interface ProtectedRouteProps {
   requiredRole?: string;
@@ -31,5 +32,10 @@ export default function ProtectedRoute({ requiredRole }: ProtectedRouteProps) {
     return <Navigate to="/" replace />;
   }
 
-  return <Outlet />;
+  return (
+    <>
+      <NavBar />
+      <Outlet />
+    </>
+  );
 }

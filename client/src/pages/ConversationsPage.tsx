@@ -1,11 +1,9 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useConversationStore } from '../stores/conversationStore';
-import { useAuthStore } from '../stores/authStore';
 
 export default function ConversationsPage() {
   const { conversations, total, limit, offset, isLoading, fetchConversations, createConversation } = useConversationStore();
-  const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('recent');
@@ -37,26 +35,6 @@ export default function ConversationsPage() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-semibold text-text-primary">Conversations</h1>
           <div className="flex gap-3">
-            <Link
-              to="/experts"
-              className="px-4 py-2 rounded-lg border border-border text-text-secondary hover:text-text-primary transition-colors"
-            >
-              Experts
-            </Link>
-            <Link
-              to="/profile"
-              className="px-4 py-2 rounded-lg border border-border text-text-secondary hover:text-text-primary transition-colors"
-            >
-              Profile
-            </Link>
-            {user?.role === 'admin' && (
-              <Link
-                to="/admin"
-                className="px-4 py-2 rounded-lg border border-border text-text-secondary hover:text-text-primary transition-colors"
-              >
-                Admin
-              </Link>
-            )}
             <button
               onClick={handleNew}
               className="px-4 py-2 rounded-lg bg-primary text-white font-medium hover:opacity-90 transition-opacity"
