@@ -356,6 +356,57 @@ router.get('/:id/messages', (req, res) => {
   res.json({ messages });
 });
 
+// PUT /:id/messages/:msgId — edit message (user messages only)
+router.put('/:id/messages/:msgId', (req, res) => {
+  const conversation = db.prepare('SELECT id FROM conversations WHERE id = ? AND user_id = ?')
+    .get(req.params.id, req.user!.id);
+  if (!conversation) {
+    res.status(404).json({ error: 'Conversation not found' });
+    return;
+  }
+
+  const msg = db.prepare('SELECT * FROM messages WHERE id = ? AND conversation_id = ?')
+    .get(req.params.msgId, req.params.id) as any;
+  if (!msg) {
+    res.status(404).json({ error: 'Message not found' });
+    return;
+  }
+  if (msg.role !== 'user') {
+    res.status(403).json({ error: 'Only user messages can be edited' });
+    return;
+  }
+
+  const { content } = req.body;
+  if (!content || typeof content !== 'string') {
+    res.status(400).json({ error: 'content is required' });
+    return;
+  }
+
+  db.prepare('UPDATE messages SET content = ? WHERE id = ?').run(content, req.params.msgId);
+  const updated = db.prepare('SELECT m.*, e.name as expert_name FROM messages m LEFT JOIN experts e ON e.id = m.expert_id WHERE m.id = ?')
+    .get(req.params.msgId);
+  res.json({ message: updated });
+});
+
+// DELETE /:id/messages/:msgId — delete message
+router.delete('/:id/messages/:msgId', (req, res) => {
+  const conversation = db.prepare('SELECT id FROM conversations WHERE id = ? AND user_id = ?')
+    .get(req.params.id, req.user!.id);
+  if (!conversation) {
+    res.status(404).json({ error: 'Conversation not found' });
+    return;
+  }
+
+  const result = db.prepare('DELETE FROM messages WHERE id = ? AND conversation_id = ?')
+    .run(req.params.msgId, req.params.id);
+  if (result.changes === 0) {
+    res.status(404).json({ error: 'Message not found' });
+    return;
+  }
+
+  res.json({ message: 'Message deleted' });
+});
+
 // POST /:id/messages/stream — SSE streaming response
 router.post('/:id/messages/stream', async (req, res) => {
   // SSE headers

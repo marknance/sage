@@ -63,6 +63,8 @@ interface ConversationState {
   assignExpert: (conversationId: number, expertId: number) => Promise<void>;
   removeExpert: (conversationId: number, expertId: number) => Promise<void>;
   updateExpertOverride: (conversationId: number, expertId: number, data: { backend_override_id?: number | null; model_override?: string | null }) => Promise<void>;
+  editMessage: (conversationId: number, messageId: number, content: string) => Promise<void>;
+  deleteMessage: (conversationId: number, messageId: number) => Promise<void>;
   uploadDocument: (conversationId: number, file: File) => Promise<void>;
   deleteDocument: (conversationId: number, docId: number) => Promise<void>;
 }
@@ -304,6 +306,19 @@ export const useConversationStore = create<ConversationState>((set) => ({
       { method: 'DELETE' }
     );
     set({ experts });
+  },
+
+  editMessage: async (conversationId, messageId, content) => {
+    const { message } = await api<{ message: Message }>(`/api/conversations/${conversationId}/messages/${messageId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
+    });
+    set((s) => ({ messages: s.messages.map((m) => m.id === messageId ? message : m) }));
+  },
+
+  deleteMessage: async (conversationId, messageId) => {
+    await api(`/api/conversations/${conversationId}/messages/${messageId}`, { method: 'DELETE' });
+    set((s) => ({ messages: s.messages.filter((m) => m.id !== messageId) }));
   },
 
   uploadDocument: async (conversationId, file) => {

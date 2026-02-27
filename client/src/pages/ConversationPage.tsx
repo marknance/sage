@@ -24,14 +24,23 @@ const LazyMessage = memo(function LazyMessage({
   msg,
   isStreaming,
   isDark,
+  onEdit,
+  onDelete,
+  onRetry,
 }: {
   msg: Message;
   isStreaming: boolean;
   isDark: boolean;
+  onEdit?: (msgId: number, content: string) => void;
+  onDelete?: (msgId: number) => void;
+  onRetry?: (content: string) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState('');
   const isStreamingMsg = isStreaming && msg.id < 0 && msg.role === 'assistant';
+  const isReal = msg.id > 0;
 
   useEffect(() => {
     const el = ref.current;
@@ -67,10 +76,10 @@ const LazyMessage = memo(function LazyMessage({
   return (
     <div
       ref={ref}
-      className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+      className={`group flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
     >
       <div
-        className={`max-w-[75%] rounded-xl px-4 py-3 ${
+        className={`max-w-[75%] rounded-xl px-4 py-3 relative ${
           msg.role === 'user'
             ? 'bg-primary/20 text-text-primary'
             : 'bg-surface border border-border text-text-primary'
@@ -79,7 +88,26 @@ const LazyMessage = memo(function LazyMessage({
         {msg.role === 'assistant' && msg.expert_name && (
           <p className="text-xs font-medium text-primary mb-1">{msg.expert_name}</p>
         )}
-        {isVisible ? (
+        {isEditing ? (
+          <div className="space-y-2">
+            <textarea
+              autoFocus
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              className="w-full px-2 py-1 rounded bg-background border border-border text-text-primary text-sm resize-none focus:outline-none focus:border-primary"
+              rows={3}
+            />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setIsEditing(false)} className="text-xs text-text-muted hover:text-text-primary">Cancel</button>
+              <button
+                onClick={() => { onEdit?.(msg.id, editContent); setIsEditing(false); }}
+                className="text-xs text-primary hover:underline"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        ) : isVisible ? (
           <div
             className={`prose prose-sm max-w-none [&>p]:mb-2 [&>p:last-child]:mb-0 ${isDark ? 'prose-invert' : ''}`}
             dangerouslySetInnerHTML={{ __html: parseMarkdown(msg.content) }}
@@ -90,9 +118,27 @@ const LazyMessage = memo(function LazyMessage({
         {isStreamingMsg && (
           <span className="inline-block w-2 h-4 bg-primary/70 animate-pulse ml-0.5 align-text-bottom rounded-sm" />
         )}
-        <p className="text-xs text-text-muted mt-2">
-          {new Date(msg.created_at).toLocaleTimeString()}
-        </p>
+        <div className="flex items-center justify-between mt-2">
+          <p className="text-xs text-text-muted">
+            {new Date(msg.created_at).toLocaleTimeString()}
+          </p>
+          {isReal && !isEditing && (
+            <div className="hidden group-hover:flex gap-2">
+              {msg.role === 'user' && (
+                <button
+                  onClick={() => { setEditContent(msg.content); setIsEditing(true); }}
+                  className="text-xs text-text-muted hover:text-primary"
+                >
+                  Edit
+                </button>
+              )}
+              {msg.role === 'assistant' && onRetry && (
+                <button onClick={() => onRetry(msg.content)} className="text-xs text-text-muted hover:text-primary">Retry</button>
+              )}
+              <button onClick={() => onDelete?.(msg.id)} className="text-xs text-text-muted hover:text-red-400">Del</button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -121,6 +167,8 @@ export default function ConversationPage() {
     assignExpert,
     removeExpert,
     updateExpertOverride,
+    editMessage,
+    deleteMessage,
     uploadDocument,
     deleteDocument,
   } = useConversationStore();
@@ -183,6 +231,15 @@ export default function ConversationPage() {
     setInput('');
     await sendMessageStream(convId, text);
   };
+
+  const handleRetry = useCallback(async (assistantMsgId: number) => {
+    // Find the user message before this assistant message
+    const idx = messages.findIndex((m) => m.id === assistantMsgId);
+    const prevUserMsg = messages.slice(0, idx).reverse().find((m) => m.role === 'user');
+    if (!prevUserMsg) return;
+    await deleteMessage(convId, assistantMsgId);
+    await sendMessageStream(convId, prevUserMsg.content);
+  }, [messages, convId, deleteMessage, sendMessageStream]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -340,7 +397,15 @@ export default function ConversationPage() {
               </div>
             )}
             {messages.map((msg) => (
-              <LazyMessage key={msg.id} msg={msg} isStreaming={isStreaming} isDark={isDark} />
+              <LazyMessage
+                key={msg.id}
+                msg={msg}
+                isStreaming={isStreaming}
+                isDark={isDark}
+                onEdit={(msgId, content) => editMessage(convId, msgId, content)}
+                onDelete={(msgId) => deleteMessage(convId, msgId)}
+                onRetry={() => handleRetry(msg.id)}
+              />
             ))}
             {isSending && !isStreaming && (
               <div className="flex justify-start">
