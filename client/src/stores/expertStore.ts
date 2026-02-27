@@ -66,6 +66,7 @@ interface ExpertState {
   clearMemories: (id: number) => Promise<void>;
   fetchAllCategories: () => Promise<void>;
   createCategory: (name: string) => Promise<Category>;
+  renameCategory: (id: number, name: string) => Promise<void>;
   deleteCategory: (id: number) => Promise<void>;
   exportExpert: (id: number) => Promise<void>;
   importExpert: (data: any, strategy: 'skip' | 'rename' | 'overwrite') => Promise<Expert>;
@@ -187,6 +188,14 @@ export const useExpertStore = create<ExpertState>((set, get) => ({
     });
     set((s) => ({ allCategories: [...s.allCategories, category] }));
     return category;
+  },
+
+  renameCategory: async (id, name) => {
+    const { category } = await api<{ category: Category }>(`/api/categories/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name }),
+    });
+    set((s) => ({ allCategories: s.allCategories.map((c) => c.id === id ? category : c) }));
   },
 
   deleteCategory: async (id) => {

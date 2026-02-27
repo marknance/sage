@@ -14,6 +14,7 @@ import BackendsPage from './pages/BackendsPage';
 import BackendFormPage from './pages/BackendFormPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import AdminUsersPage from './pages/AdminUsersPage';
+import CategoriesPage from './pages/CategoriesPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,6 +43,7 @@ function App() {
             <Route path="/experts/new" element={<ExpertCreatePage />} />
             <Route path="/experts/:id" element={<ExpertDetailPage />} />
             <Route path="/backends" element={<BackendsPage />} />
+            <Route path="/categories" element={<CategoriesPage />} />
             <Route path="/backends/new" element={<BackendFormPage />} />
             <Route path="/backends/:id" element={<BackendFormPage />} />
             <Route path="/profile" element={<ProfilePage />} />

@@ -6,6 +6,7 @@ import { useThemeStore } from '../stores/themeStore';
 const NAV_ITEMS = [
   { to: '/conversations', label: 'Conversations' },
   { to: '/experts', label: 'Experts' },
+  { to: '/categories', label: 'Categories' },
   { to: '/backends', label: 'Backends' },
   { to: '/profile', label: 'Profile' },
 ];
