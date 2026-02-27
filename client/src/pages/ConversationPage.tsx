@@ -253,11 +253,11 @@ export default function ConversationPage() {
 
         {/* Sidebar */}
         {sidebarOpen && (
-          <div className="w-72 border-l border-border bg-surface overflow-y-auto shrink-0 p-4 space-y-6">
+          <div className="w-80 border-l border-border bg-surface overflow-y-auto shrink-0 p-5 space-y-8">
             {/* Settings */}
             <div>
               <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-3">Settings</h3>
-              <label className="flex items-center justify-between mb-2">
+              <label className="flex items-center justify-between mb-3">
                 <span className="text-sm text-text-primary">Debate Mode</span>
                 <input
                   type="checkbox"
@@ -285,10 +285,10 @@ export default function ConversationPage() {
               {assignedExperts.length === 0 ? (
                 <p className="text-xs text-text-muted mb-2">No experts assigned. Using default AI.</p>
               ) : (
-                <div className="space-y-2 mb-3">
+                <div className="space-y-3 mb-4">
                   {assignedExperts.map((expert) => (
-                    <div key={expert.id} className="bg-background rounded-lg px-3 py-2">
-                      <div className="flex items-center justify-between mb-1">
+                    <div key={expert.id} className="bg-background rounded-lg px-3 py-3">
+                      <div className="flex items-center justify-between mb-2">
                         <div>
                           <p className="text-sm text-text-primary font-medium">{expert.name}</p>
                           <p className="text-xs text-text-muted">{expert.domain}</p>
@@ -306,7 +306,7 @@ export default function ConversationPage() {
                           backend_override_id: e.target.value ? Number(e.target.value) : null,
                           model_override: null,
                         })}
-                        className="w-full mt-1 px-2 py-1 rounded bg-surface border border-border text-text-secondary text-xs focus:outline-none focus:border-primary"
+                        className="w-full mt-2 px-2 py-1.5 rounded bg-surface border border-border text-text-secondary text-xs focus:outline-none focus:border-primary"
                       >
                         <option value="">Backend: default</option>
                         {backends.filter((b) => b.is_active).map((b) => (
@@ -319,7 +319,7 @@ export default function ConversationPage() {
                           onChange={(e) => updateExpertOverride(convId, expert.id, {
                             model_override: e.target.value || null,
                           })}
-                          className="w-full mt-1 px-2 py-1 rounded bg-surface border border-border text-text-secondary text-xs focus:outline-none focus:border-primary"
+                          className="w-full mt-2 px-2 py-1.5 rounded bg-surface border border-border text-text-secondary text-xs focus:outline-none focus:border-primary"
                         >
                           <option value="">Default model</option>
                           {modelsMap[String(expert.backend_override_id)]!.map((m) => (
@@ -334,7 +334,7 @@ export default function ConversationPage() {
                             model_override: e.target.value || null,
                           })}
                           placeholder="Model override"
-                          className="w-full mt-1 px-2 py-1 rounded bg-surface border border-border text-text-secondary text-xs focus:outline-none focus:border-primary"
+                          className="w-full mt-2 px-2 py-1.5 rounded bg-surface border border-border text-text-secondary text-xs focus:outline-none focus:border-primary"
                         />
                       ) : null}
                     </div>
@@ -366,9 +366,9 @@ export default function ConversationPage() {
                 Documents ({documents.length})
               </h3>
               {documents.length > 0 && (
-                <div className="space-y-2 mb-3">
+                <div className="space-y-2 mb-4">
                   {documents.map((doc) => (
-                    <div key={doc.id} className="flex items-center justify-between bg-background rounded-lg px-3 py-2">
+                    <div key={doc.id} className="flex items-center justify-between bg-background rounded-lg px-3 py-2.5">
                       <div className="min-w-0">
                         <p className="text-sm text-text-primary truncate">{doc.filename}</p>
                         <p className="text-xs text-text-muted">

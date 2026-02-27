@@ -94,13 +94,13 @@ export default function ExpertCreatePage() {
           <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-8">
           {/* Basic Info */}
           <div className="bg-surface rounded-xl border border-border p-6">
-            <h2 className="text-lg font-medium text-text-primary mb-4">Basic Info</h2>
-            <div className="space-y-4">
+            <h2 className="text-lg font-medium text-text-primary mb-5">Basic Info</h2>
+            <div className="space-y-5">
               <div>
-                <label className="block text-sm text-text-secondary mb-1">Name *</label>
+                <label className="block text-sm text-text-secondary mb-1.5">Name *</label>
                 <input
                   type="text"
                   required
@@ -111,7 +111,7 @@ export default function ExpertCreatePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-text-secondary mb-1">Domain *</label>
+                <label className="block text-sm text-text-secondary mb-1.5">Domain *</label>
                 <input
                   type="text"
                   required
@@ -122,7 +122,7 @@ export default function ExpertCreatePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-text-secondary mb-1">Description</label>
+                <label className="block text-sm text-text-secondary mb-1.5">Description</label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -136,10 +136,10 @@ export default function ExpertCreatePage() {
 
           {/* Personality */}
           <div className="bg-surface rounded-xl border border-border p-6">
-            <h2 className="text-lg font-medium text-text-primary mb-4">Personality</h2>
-            <div className="space-y-4">
+            <h2 className="text-lg font-medium text-text-primary mb-5">Personality</h2>
+            <div className="space-y-5">
               <div>
-                <label className="block text-sm text-text-secondary mb-1">Tone</label>
+                <label className="block text-sm text-text-secondary mb-1.5">Tone</label>
                 <select
                   value={personality_tone}
                   onChange={(e) => setTone(e.target.value)}
@@ -153,7 +153,7 @@ export default function ExpertCreatePage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-text-secondary mb-1">System Prompt</label>
+                <label className="block text-sm text-text-secondary mb-1.5">System Prompt</label>
                 <textarea
                   value={system_prompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
@@ -167,8 +167,8 @@ export default function ExpertCreatePage() {
 
           {/* Behaviors */}
           <div className="bg-surface rounded-xl border border-border p-6">
-            <h2 className="text-lg font-medium text-text-primary mb-4">Behaviors</h2>
-            <div className="space-y-3">
+            <h2 className="text-lg font-medium text-text-primary mb-5">Behaviors</h2>
+            <div className="space-y-4">
               {BEHAVIOR_KEYS.map((key) => (
                 <label key={key} className="flex items-center justify-between cursor-pointer">
                   <span className="text-text-primary">{BEHAVIOR_LABELS[key]}</span>
@@ -196,10 +196,10 @@ export default function ExpertCreatePage() {
 
           {/* Advanced */}
           <div className="bg-surface rounded-xl border border-border p-6">
-            <h2 className="text-lg font-medium text-text-primary mb-4">Advanced</h2>
-            <div className="space-y-4">
+            <h2 className="text-lg font-medium text-text-primary mb-5">Advanced</h2>
+            <div className="space-y-5">
               <div>
-                <label className="block text-sm text-text-secondary mb-1">AI Backend</label>
+                <label className="block text-sm text-text-secondary mb-1.5">AI Backend</label>
                 <select
                   value={backend_id}
                   onChange={(e) => { setBackendId(e.target.value); setModelOverride(''); }}
@@ -214,7 +214,7 @@ export default function ExpertCreatePage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-text-secondary mb-1">Model Override</label>
+                <label className="block text-sm text-text-secondary mb-1.5">Model Override</label>
                 {backend_id && models.length > 0 ? (
                   <select
                     value={model_override}

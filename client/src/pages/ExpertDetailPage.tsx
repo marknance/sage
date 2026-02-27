@@ -142,7 +142,7 @@ export default function ExpertDetailPage() {
 
   return (
     <div className="min-h-screen bg-background px-4 py-8">
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="max-w-2xl mx-auto space-y-8">
         <div className="flex items-center gap-3">
           <Link to="/experts" className="text-text-muted hover:text-text-primary transition-colors">
             &larr; Back
@@ -210,9 +210,9 @@ export default function ExpertDetailPage() {
           )}
 
           {editing ? (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <label className="block text-sm text-text-secondary mb-1">Name</label>
+                <label className="block text-sm text-text-secondary mb-1.5">Name</label>
                 <input
                   type="text"
                   value={editForm.name}
@@ -221,7 +221,7 @@ export default function ExpertDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-text-secondary mb-1">Domain</label>
+                <label className="block text-sm text-text-secondary mb-1.5">Domain</label>
                 <input
                   type="text"
                   value={editForm.domain}
@@ -230,7 +230,7 @@ export default function ExpertDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-text-secondary mb-1">Description</label>
+                <label className="block text-sm text-text-secondary mb-1.5">Description</label>
                 <textarea
                   value={editForm.description}
                   onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
@@ -239,7 +239,7 @@ export default function ExpertDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-text-secondary mb-1">Tone</label>
+                <label className="block text-sm text-text-secondary mb-1.5">Tone</label>
                 <select
                   value={editForm.personality_tone}
                   onChange={(e) => setEditForm((f) => ({ ...f, personality_tone: e.target.value }))}
@@ -253,7 +253,7 @@ export default function ExpertDetailPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-text-secondary mb-1">System Prompt</label>
+                <label className="block text-sm text-text-secondary mb-1.5">System Prompt</label>
                 <textarea
                   value={editForm.system_prompt}
                   onChange={(e) => setEditForm((f) => ({ ...f, system_prompt: e.target.value }))}
@@ -262,7 +262,7 @@ export default function ExpertDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-text-secondary mb-1">AI Backend</label>
+                <label className="block text-sm text-text-secondary mb-1.5">AI Backend</label>
                 <select
                   value={editForm.backend_id}
                   onChange={(e) => setEditForm((f) => ({ ...f, backend_id: e.target.value, model_override: '' }))}
@@ -277,7 +277,7 @@ export default function ExpertDetailPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-text-secondary mb-1">Model Override</label>
+                <label className="block text-sm text-text-secondary mb-1.5">Model Override</label>
                 {editForm.backend_id && models.length > 0 ? (
                   <select
                     value={editForm.model_override}
@@ -319,7 +319,7 @@ export default function ExpertDetailPage() {
               </label>
             </div>
           ) : (
-            <dl className="space-y-3">
+            <dl className="space-y-4">
               <div>
                 <dt className="text-sm text-text-muted">Domain</dt>
                 <dd className="text-text-primary">{currentExpert.domain}</dd>
@@ -364,8 +364,8 @@ export default function ExpertDetailPage() {
 
         {/* Behaviors Card */}
         <div className="bg-surface rounded-xl border border-border p-6">
-          <h2 className="text-lg font-medium text-text-primary mb-4">Behaviors</h2>
-          <div className="space-y-3">
+          <h2 className="text-lg font-medium text-text-primary mb-5">Behaviors</h2>
+          <div className="space-y-4">
             {behaviors.map((b) => (
               <label key={b.id} className="flex items-center justify-between cursor-pointer">
                 <span className="text-text-primary">{BEHAVIOR_LABELS[b.behavior_key] || b.behavior_key}</span>
@@ -391,7 +391,7 @@ export default function ExpertDetailPage() {
 
         {/* Categories Card */}
         <div className="bg-surface rounded-xl border border-border p-6">
-          <h2 className="text-lg font-medium text-text-primary mb-4">Categories</h2>
+          <h2 className="text-lg font-medium text-text-primary mb-5">Categories</h2>
           {categories.length > 0 ? (
             <div className="flex flex-wrap gap-2 mb-4">
               {categories.map((c) => (
