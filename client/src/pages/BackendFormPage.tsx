@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { useNavigate, useParams, Link } from 'react-router';
 import { useBackendStore } from '../stores/backendStore';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { toast } from '../stores/toastStore';
 
 const TYPE_OPTIONS = ['ollama', 'openai', 'anthropic', 'lmstudio', 'custom'];
 
@@ -17,7 +18,8 @@ export default function BackendFormPage() {
   const { id } = useParams();
   const isEdit = !!id;
   const navigate = useNavigate();
-  const { currentBackend, fetchBackend, createBackend, updateBackend, testBackend, testResult, clearTestResult } = useBackendStore();
+  const { currentBackend, fetchBackend, createBackend, updateBackend, deleteBackend, testBackend, testResult, clearTestResult } = useBackendStore();
+  const [deleting, setDeleting] = useState(false);
 
   const [name, setName] = useState('');
   const [type, setType] = useState('ollama');
@@ -274,6 +276,32 @@ export default function BackendFormPage() {
           >
             {loading ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Backend'}
           </button>
+
+          {isEdit && (
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={async () => {
+                if (!confirm('Delete this backend? Experts using it will fall back to the default.')) return;
+                setDeleting(true);
+                try {
+                  await deleteBackend(Number(id));
+                  navigate('/backends');
+                } catch (err: any) {
+                  if (err.status === 409) {
+                    toast.error(err.message || 'Backend is in use and cannot be deleted');
+                  } else {
+                    toast.error(err.message || 'Failed to delete backend');
+                  }
+                } finally {
+                  setDeleting(false);
+                }
+              }}
+              className="w-full py-3 rounded-lg border border-destructive text-destructive font-medium hover:bg-destructive/10 disabled:opacity-50 transition-colors"
+            >
+              {deleting ? 'Deleting...' : 'Delete Backend'}
+            </button>
+          )}
         </form>
 
         {blocker.state === 'blocked' && (
