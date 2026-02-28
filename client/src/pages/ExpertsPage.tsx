@@ -2,19 +2,25 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useExpertStore } from '../stores/expertStore';
 import ImportExpertModal from '../components/ImportExpertModal';
+import { SkeletonGrid } from '../components/Skeleton';
 
 export default function ExpertsPage() {
-  const { experts, isLoading, fetchExperts, fetchAllCategories, allCategories } = useExpertStore();
+  const { experts, total, limit, offset, isLoading, fetchExperts, fetchAllCategories, allCategories } = useExpertStore();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [sort, setSort] = useState('recent');
   const [showImport, setShowImport] = useState(false);
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
-    fetchExperts({ search: search || undefined, category: category || undefined, sort });
+    setPage(0);
+  }, [search, category, sort]);
+
+  useEffect(() => {
+    fetchExperts({ search: search || undefined, category: category || undefined, sort, offset: page * 24 });
     fetchAllCategories();
-  }, [search, category, sort, fetchExperts, fetchAllCategories]);
+  }, [search, category, sort, page, fetchExperts, fetchAllCategories]);
 
   return (
     <div className="min-h-screen bg-background px-4 py-8">
@@ -72,7 +78,7 @@ export default function ExpertsPage() {
 
         {/* Content */}
         {isLoading ? (
-          <p className="text-text-secondary text-center py-12">Loading...</p>
+          <SkeletonGrid />
         ) : experts.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-text-muted mb-4">No experts yet. Create your first one!</p>
@@ -125,6 +131,29 @@ export default function ExpertsPage() {
                 )}
               </Link>
             ))}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {total > limit && (
+          <div className="flex items-center justify-center gap-4 mt-6">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="px-4 py-2 rounded-lg border border-border text-text-secondary hover:text-text-primary disabled:opacity-50 transition-colors"
+            >
+              Previous
+            </button>
+            <span className="text-sm text-text-secondary">
+              Page {page + 1} of {Math.ceil(total / limit)}
+            </span>
+            <button
+              onClick={() => setPage((p) => p + 1)}
+              disabled={offset + limit >= total}
+              className="px-4 py-2 rounded-lg border border-border text-text-secondary hover:text-text-primary disabled:opacity-50 transition-colors"
+            >
+              Next
+            </button>
           </div>
         )}
       </div>

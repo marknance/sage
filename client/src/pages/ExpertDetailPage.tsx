@@ -1,10 +1,12 @@
 import { useEffect, useState, useRef, type FormEvent } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { useExpertStore, type Behavior } from '../stores/expertStore';
+import { useConversationStore } from '../stores/conversationStore';
 import { useBackendStore } from '../stores/backendStore';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useToastStore } from '../stores/toastStore';
 import { api } from '../lib/api';
+import { Spinner } from '../components/Skeleton';
 
 const TONE_OPTIONS = ['formal', 'casual', 'technical', 'friendly', 'concise'];
 
@@ -43,6 +45,7 @@ export default function ExpertDetailPage() {
     cloneExpert,
     createCategory,
   } = useExpertStore();
+  const { createConversation, assignExpert: assignConvExpert } = useConversationStore();
   const { backends, fetchBackends, models, fetchModels } = useBackendStore();
 
   const [editing, setEditing] = useState(false);
@@ -230,11 +233,7 @@ export default function ExpertDetailPage() {
   }
 
   if (isLoading || !currentExpert) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <p className="text-text-secondary">Loading...</p>
-      </div>
-    );
+    return <Spinner />;
   }
 
   const assignedCategoryIds = new Set(categories.map((c) => c.id));
@@ -243,11 +242,23 @@ export default function ExpertDetailPage() {
   return (
     <div className="min-h-screen bg-background px-4 py-8">
       <div className="max-w-2xl mx-auto space-y-8">
-        <div className="flex items-center gap-3">
-          <Link to="/experts" className="text-text-muted hover:text-text-primary transition-colors">
-            &larr; Back
-          </Link>
-          <h1 className="text-2xl font-semibold text-text-primary">{currentExpert.name}</h1>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link to="/experts" className="text-text-muted hover:text-text-primary transition-colors">
+              &larr; Back
+            </Link>
+            <h1 className="text-2xl font-semibold text-text-primary">{currentExpert.name}</h1>
+          </div>
+          <button
+            onClick={async () => {
+              const conv = await createConversation(undefined, 'standard');
+              await assignConvExpert(conv.id, expertId);
+              navigate(`/conversations/${conv.id}`);
+            }}
+            className="px-4 py-2 rounded-lg bg-primary text-white font-medium hover:opacity-90 transition-opacity text-sm"
+          >
+            Start Conversation
+          </button>
         </div>
 
         {/* Expert Info Card */}

@@ -68,9 +68,15 @@ export default function ImportExpertModal({ onClose, onImported }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-surface border border-border rounded-xl p-6 max-w-md mx-4 w-full">
-        <h3 className="text-lg font-medium text-text-primary mb-4">Import Expert</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="import-title"
+        className="bg-surface border border-border rounded-xl p-6 max-w-md mx-4 w-full"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 id="import-title" className="text-lg font-medium text-text-primary mb-4">Import Expert</h3>
 
         <div className="mb-4">
           <input

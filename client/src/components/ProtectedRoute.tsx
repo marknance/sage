@@ -33,8 +33,8 @@ export default function ProtectedRoute({ requiredRole }: ProtectedRouteProps) {
     return <Navigate to="/" replace />;
   }
 
-  if (user?.must_change_password && location.pathname !== '/profile') {
-    return <Navigate to="/profile" replace />;
+  if (user?.must_change_password && location.pathname !== '/settings') {
+    return <Navigate to="/settings" replace />;
   }
 
   return (

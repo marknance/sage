@@ -288,6 +288,11 @@ export const useConversationStore = create<ConversationState>((set) => ({
               messages: s.messages.map((m) => m.id === currentPlaceholderId ? data : m),
             }));
             break;
+          case 'title_update':
+            set((s) => ({
+              currentConversation: s.currentConversation ? { ...s.currentConversation, title: data.title } : null,
+            }));
+            break;
           case 'suggested_experts':
             set({ suggestedExperts: data.experts || [] });
             break;

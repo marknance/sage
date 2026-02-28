@@ -50,8 +50,17 @@ router.get('/', (req, res) => {
     query += ` ORDER BY COALESCE(e.last_used_at, e.created_at) DESC`;
   }
 
-  const experts = db.prepare(query).all(...params);
-  res.json({ experts });
+  // Count total before pagination
+  const countQuery = query.replace(/SELECT e\.\*[\s\S]*?FROM experts e/, 'SELECT COUNT(DISTINCT e.id) as total FROM experts e');
+  const countResult = db.prepare(countQuery.replace(/GROUP BY.*$/, '').replace(/ORDER BY.*$/, '')).get(...params) as { total: number };
+  const total = countResult.total;
+
+  const limit = Math.min(Math.max(Number(req.query.limit) || 24, 1), 100);
+  const offset = Math.max(Number(req.query.offset) || 0, 0);
+  query += ` LIMIT ? OFFSET ?`;
+
+  const experts = db.prepare(query).all(...params, limit, offset);
+  res.json({ experts, total, limit, offset });
 });
 
 // POST /generate — AI-assisted expert generation

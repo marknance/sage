@@ -8,6 +8,7 @@ import { useExpertStore, type Expert } from '../stores/expertStore';
 import { useBackendStore } from '../stores/backendStore';
 import { useThemeStore } from '../stores/themeStore';
 import { toast } from '../stores/toastStore';
+import { Spinner } from '../components/Skeleton';
 import { useConfirmStore } from '../stores/confirmStore';
 import hljs from 'highlight.js/lib/core';
 import javascript from 'highlight.js/lib/languages/javascript';
@@ -340,11 +341,7 @@ export default function ConversationPage() {
   );
 
   if (isLoading && !currentConversation) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-text-secondary">Loading...</p>
-      </div>
-    );
+    return <Spinner />;
   }
 
   if (!currentConversation) {
@@ -524,7 +521,9 @@ export default function ConversationPage() {
 
         {/* Sidebar */}
         {sidebarOpen && (
-          <div className="w-80 border-l border-border bg-surface overflow-y-auto shrink-0 p-5 space-y-8">
+          <>
+          <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setSidebarOpen(false)} />
+          <div className="fixed inset-y-0 right-0 z-40 w-80 md:static md:z-auto border-l border-border bg-surface overflow-y-auto shrink-0 p-5 space-y-8">
             {/* Settings */}
             <div>
               <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-3">Settings</h3>
@@ -702,12 +701,13 @@ export default function ConversationPage() {
               </div>
             </div>
           </div>
+          </>
         )}
       </div>
 
       {/* Document Preview Modal */}
       {previewDoc && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setPreviewDoc(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" onClick={() => setPreviewDoc(null)}>
           <div className="bg-surface border border-border rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-text-primary truncate">{previewDoc.filename}</h3>

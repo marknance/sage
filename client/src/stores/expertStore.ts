@@ -45,6 +45,9 @@ export interface Memory {
 
 interface ExpertState {
   experts: Expert[];
+  total: number;
+  limit: number;
+  offset: number;
   currentExpert: Expert | null;
   behaviors: Behavior[];
   categories: Category[];
@@ -52,7 +55,7 @@ interface ExpertState {
   allCategories: Category[];
   isLoading: boolean;
 
-  fetchExperts: (params?: { search?: string; category?: string; sort?: string }) => Promise<void>;
+  fetchExperts: (params?: { search?: string; category?: string; sort?: string; limit?: number; offset?: number }) => Promise<void>;
   fetchExpert: (id: number) => Promise<void>;
   checkExpertUsage: (id: number) => Promise<{ conversation_count: number; message_count: number }>;
   createExpert: (data: Partial<Expert>) => Promise<Expert>;
@@ -75,6 +78,9 @@ interface ExpertState {
 
 export const useExpertStore = create<ExpertState>((set, get) => ({
   experts: [],
+  total: 0,
+  limit: 24,
+  offset: 0,
   currentExpert: null,
   behaviors: [],
   categories: [],
@@ -89,9 +95,11 @@ export const useExpertStore = create<ExpertState>((set, get) => ({
       if (params?.search) query.set('search', params.search);
       if (params?.category) query.set('category', params.category);
       if (params?.sort) query.set('sort', params.sort);
+      if (params?.limit) query.set('limit', String(params.limit));
+      if (params?.offset) query.set('offset', String(params.offset));
       const qs = query.toString();
-      const { experts } = await api<{ experts: Expert[] }>(`/api/experts${qs ? `?${qs}` : ''}`);
-      set({ experts, isLoading: false });
+      const data = await api<{ experts: Expert[]; total: number; limit: number; offset: number }>(`/api/experts${qs ? `?${qs}` : ''}`);
+      set({ experts: data.experts, total: data.total, limit: data.limit, offset: data.offset, isLoading: false });
     } catch (err: any) {
       set({ isLoading: false });
       toast.error(err.message || 'Failed to load experts');

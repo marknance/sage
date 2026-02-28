@@ -7,6 +7,8 @@ import { db } from '../index.js';
 import { authenticate } from '../middleware/auth.js';
 import { chatCompletion, chatCompletionStream, buildSystemPrompt, resolveBackendConfig } from '../services/ollama.js';
 import { isWithinLength } from '../lib/validate.js';
+import { PDFParse } from 'pdf-parse';
+import mammoth from 'mammoth';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -598,6 +600,24 @@ router.post('/:id/messages/stream', async (req, res) => {
 
     if (!disconnected) {
       db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(req.params.id);
+
+      // Auto-generate title if still "New Conversation" and this is the first exchange
+      if (conversation.title === 'New Conversation') {
+        const msgCount = (db.prepare('SELECT COUNT(*) as count FROM messages WHERE conversation_id = ?')
+          .get(req.params.id) as { count: number }).count;
+        if (msgCount <= 3) {
+          const lastAssistant = db.prepare(
+            'SELECT content FROM messages WHERE conversation_id = ? AND role = ? ORDER BY created_at DESC LIMIT 1'
+          ).get(req.params.id, 'assistant') as { content: string } | undefined;
+          if (lastAssistant) {
+            const newTitle = await generateTitle(req.params.id, content, lastAssistant.content, req.user!.id);
+            if (newTitle) {
+              sendEvent('title_update', { title: newTitle });
+            }
+          }
+        }
+      }
+
       sendEvent('done', {});
 
       // Async memory extraction for memory-enabled experts
@@ -802,6 +822,32 @@ function getExpertResponseStream(
   return chatCompletionStream({ messages, model, backend, signal });
 }
 
+async function generateTitle(
+  conversationId: string,
+  userContent: string,
+  aiContent: string,
+  userId: number
+): Promise<string | null> {
+  try {
+    const userSettings = db.prepare('SELECT default_backend_id FROM settings WHERE user_id = ?')
+      .get(userId) as { default_backend_id: number | null } | undefined;
+    const backend = resolveBackendConfig(null, userSettings?.default_backend_id, db);
+    const prompt = `Summarize this conversation in 3-6 words as a title. Return ONLY the title, no quotes or punctuation at the end.\n\nUser: ${userContent.slice(0, 500)}\n\nAssistant: ${aiContent.slice(0, 500)}`;
+    const title = await chatCompletion({
+      messages: [{ role: 'user', content: prompt }],
+      backend,
+    });
+    const cleaned = title.replace(/^["']|["']$/g, '').trim().slice(0, 100);
+    if (cleaned) {
+      db.prepare('UPDATE conversations SET title = ? WHERE id = ?').run(cleaned, conversationId);
+      return cleaned;
+    }
+  } catch (err) {
+    console.error('Title generation error:', err);
+  }
+  return null;
+}
+
 function getTypePrefix(type: string): string {
   return TYPE_PROMPTS[type] || '';
 }
@@ -865,7 +911,7 @@ Return JSON array only:`;
     }
   } catch (err) {
     // Extraction is best-effort, don't fail the conversation
-    throw err;
+    console.error('Memory extraction error:', err);
   }
 }
 
@@ -883,7 +929,7 @@ function findSuggestedExperts(userId: number, messageContent: string, excludeExp
 }
 
 // POST /:id/documents — upload file
-router.post('/:id/documents', upload.single('file'), (req, res) => {
+router.post('/:id/documents', upload.single('file'), async (req, res) => {
   const conversation = db.prepare('SELECT id FROM conversations WHERE id = ? AND user_id = ?')
     .get(req.params.id, req.user!.id);
   if (!conversation) {
@@ -907,6 +953,24 @@ router.post('/:id/documents', upload.single('file'), (req, res) => {
       extractedText = raw.slice(0, 10_000);
     } catch {
       // Extraction failed — leave null
+    }
+  } else if (ext === '.pdf') {
+    try {
+      const filePath = path.join(uploadsDir, req.file.filename);
+      const dataBuffer = fs.readFileSync(filePath);
+      const parser = new PDFParse({ data: dataBuffer });
+      const pdfData = await parser.getText();
+      extractedText = pdfData.text.slice(0, 10_000);
+    } catch {
+      // PDF extraction failed — leave null
+    }
+  } else if (ext === '.docx') {
+    try {
+      const filePath = path.join(uploadsDir, req.file.filename);
+      const result = await mammoth.extractRawText({ path: filePath });
+      extractedText = result.value.slice(0, 10_000);
+    } catch {
+      // DOCX extraction failed — leave null
     }
   }
 

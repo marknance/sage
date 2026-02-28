@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { api } from '../lib/api';
 import { useConversationStore } from '../stores/conversationStore';
 import { useConfirmStore } from '../stores/confirmStore';
+import { SkeletonGrid } from '../components/Skeleton';
 
 export default function ConversationsPage() {
   const { conversations, total, limit, offset, isLoading, fetchConversations, createConversation, togglePin, bulkDeleteConversations } = useConversationStore();
@@ -144,7 +145,7 @@ export default function ConversationsPage() {
 
         {/* Content */}
         {isLoading ? (
-          <p className="text-text-secondary text-center py-12">Loading...</p>
+          <SkeletonGrid />
         ) : conversations.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-text-muted mb-4">No conversations yet. Start your first one!</p>
@@ -160,7 +161,7 @@ export default function ConversationsPage() {
             {conversations.map((conv) => (
               <div
                 key={conv.id}
-                className={`bg-surface rounded-xl border p-5 hover:border-primary/50 transition-colors relative ${
+                className={`group bg-surface rounded-xl border p-5 hover:border-primary/50 transition-colors relative ${
                   conv.is_pinned ? 'border-primary/30' : 'border-border'
                 }`}
               >
@@ -185,7 +186,6 @@ export default function ConversationsPage() {
                       conv.is_pinned ? 'text-primary' : 'text-text-muted opacity-0 group-hover:opacity-100'
                     }`}
                     title={conv.is_pinned ? 'Unpin' : 'Pin'}
-                    style={conv.is_pinned ? {} : { opacity: 0.4 }}
                   >
                     {conv.is_pinned ? '\uD83D\uDCCC' : '\uD83D\uDCCC'}
                   </button>

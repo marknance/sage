@@ -23,10 +23,28 @@ export default function ConfirmModal() {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={handleCancel}>
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-title"
         className="bg-surface rounded-xl border border-border p-6 max-w-sm w-full mx-4 shadow-lg"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === 'Tab') {
+            const focusable = e.currentTarget.querySelectorAll<HTMLElement>(
+              'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+            );
+            if (focusable.length === 0) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (e.shiftKey) {
+              if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+            } else {
+              if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+            }
+          }
+        }}
       >
-        <h3 className="text-lg font-semibold text-text-primary mb-2">{title}</h3>
+        <h3 id="confirm-title" className="text-lg font-semibold text-text-primary mb-2">{title}</h3>
         <p className="text-sm text-text-secondary mb-6">{message}</p>
         <div className="flex justify-end gap-3">
           <button
