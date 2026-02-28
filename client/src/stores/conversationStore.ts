@@ -16,6 +16,7 @@ export interface Conversation {
   expert_count?: number;
   message_count?: number;
   last_message?: string | null;
+  tags?: { id: number; name: string; color: string }[];
 }
 
 export interface Message {
@@ -26,6 +27,13 @@ export interface Message {
   content: string;
   expert_name?: string | null;
   created_at: string;
+  prompt_tokens?: number | null;
+  completion_tokens?: number | null;
+  model?: string | null;
+  error?: boolean;
+  parent_message_id?: number | null;
+  branch_label?: string | null;
+  sibling_count?: number;
 }
 
 export interface Document {
@@ -54,7 +62,7 @@ interface ConversationState {
   isSending: boolean;
   isStreaming: boolean;
 
-  fetchConversations: (params?: { search?: string; sort?: string; type?: string; pinned?: string; limit?: number; offset?: number }) => Promise<void>;
+  fetchConversations: (params?: { search?: string; sort?: string; type?: string; pinned?: string; tag?: string; limit?: number; offset?: number }) => Promise<void>;
   togglePin: (id: number) => Promise<void>;
   fetchOlderMessages: (conversationId: number, beforeId: number) => Promise<void>;
   fetchConversation: (id: number) => Promise<void>;
@@ -67,6 +75,8 @@ interface ConversationState {
   assignExpert: (conversationId: number, expertId: number) => Promise<void>;
   removeExpert: (conversationId: number, expertId: number) => Promise<void>;
   updateExpertOverride: (conversationId: number, expertId: number, data: { backend_override_id?: number | null; model_override?: string | null }) => Promise<void>;
+  forkFromMessage: (conversationId: number, messageId: number) => Promise<void>;
+  retryMessage: (conversationId: number, messageId: number) => Promise<void>;
   editMessage: (conversationId: number, messageId: number, content: string) => Promise<void>;
   deleteMessage: (conversationId: number, messageId: number) => Promise<void>;
   uploadDocument: (conversationId: number, file: File) => Promise<void>;
@@ -96,6 +106,7 @@ export const useConversationStore = create<ConversationState>((set) => ({
       if (params?.sort) query.set('sort', params.sort);
       if (params?.type) query.set('type', params.type);
       if (params?.pinned) query.set('pinned', params.pinned);
+      if (params?.tag) query.set('tag', params.tag);
       if (params?.limit) query.set('limit', String(params.limit));
       if (params?.offset) query.set('offset', String(params.offset));
       const qs = query.toString();
@@ -296,8 +307,23 @@ export const useConversationStore = create<ConversationState>((set) => ({
           case 'suggested_experts':
             set({ suggestedExperts: data.experts || [] });
             break;
+          case 'usage':
+            // Store usage on the current assistant message
+            set((s) => ({
+              messages: s.messages.map((m) =>
+                m.id === currentPlaceholderId
+                  ? { ...m, prompt_tokens: data.prompt_tokens, completion_tokens: data.completion_tokens, model: data.model }
+                  : m
+              ),
+            }));
+            break;
           case 'error':
-            console.error('Stream error:', data.message);
+            // Mark current streaming message as errored
+            set((s) => ({
+              messages: s.messages.map((m) =>
+                m.id === currentPlaceholderId ? { ...m, error: true } : m
+              ),
+            }));
             break;
           case 'done':
             set({ isSending: false, isStreaming: false });
@@ -308,12 +334,89 @@ export const useConversationStore = create<ConversationState>((set) => ({
       set({ isSending: false, isStreaming: false });
     } catch (err: any) {
       set((s) => ({
-        messages: s.messages.filter((m) => m.id > 0),
+        messages: s.messages.map((m) =>
+          m.id < 0 && m.role === 'assistant' ? { ...m, error: true } : m
+        ).filter((m) => !(m.id < 0 && m.role === 'user')),
         isSending: false,
         isStreaming: false,
       }));
       toast.error(err.message || 'Failed to get AI response');
     }
+  },
+
+  forkFromMessage: async (conversationId, messageId) => {
+    const placeholderId = -(Date.now());
+    set((s) => ({
+      isStreaming: true,
+      isSending: true,
+      messages: [...s.messages, {
+        id: placeholderId,
+        conversation_id: conversationId,
+        expert_id: null,
+        role: 'assistant' as const,
+        content: '',
+        created_at: new Date().toISOString(),
+        branch_label: 'Branching...',
+      }],
+    }));
+
+    let currentPlaceholderId = placeholderId;
+    try {
+      await streamApi(`/api/conversations/${conversationId}/messages/${messageId}/branch`, {}, (event, data) => {
+        switch (event) {
+          case 'expert_start':
+            currentPlaceholderId = placeholderId;
+            set((s) => ({
+              messages: s.messages.map((m) => m.id === placeholderId
+                ? { ...m, expert_id: data.expert_id, expert_name: data.expert_name }
+                : m),
+            }));
+            break;
+          case 'token':
+            set((s) => ({
+              messages: s.messages.map((m) =>
+                m.id === currentPlaceholderId
+                  ? { ...m, content: m.content + data.content }
+                  : m
+              ),
+            }));
+            break;
+          case 'expert_end':
+            set((s) => ({
+              messages: s.messages.map((m) => m.id === currentPlaceholderId ? data : m),
+            }));
+            break;
+          case 'done':
+            set({ isSending: false, isStreaming: false });
+            break;
+        }
+      });
+      set({ isSending: false, isStreaming: false });
+    } catch (err: any) {
+      set((s) => ({
+        messages: s.messages.filter((m) => m.id !== placeholderId),
+        isSending: false,
+        isStreaming: false,
+      }));
+      toast.error(err.message || 'Failed to create branch');
+    }
+  },
+
+  retryMessage: async (conversationId, messageId) => {
+    const state = useConversationStore.getState();
+    const idx = state.messages.findIndex((m) => m.id === messageId);
+    if (idx < 0) return;
+    const prevUserMsg = state.messages.slice(0, idx).reverse().find((m) => m.role === 'user');
+    if (!prevUserMsg) return;
+    // Remove the failed message
+    set((s) => ({ messages: s.messages.filter((m) => m.id !== messageId) }));
+    // Resend via the stream (which deletes and re-creates on server)
+    try {
+      await api(`/api/conversations/${conversationId}/messages/${messageId}`, { method: 'DELETE' });
+    } catch {
+      // Might already be gone
+    }
+    await useConversationStore.getState().sendMessageStream(conversationId, prevUserMsg.content);
   },
 
   updateExpertOverride: async (conversationId, expertId, data) => {

@@ -1,10 +1,13 @@
 import axios from 'axios';
 import type { Database as DatabaseType } from 'better-sqlite3';
+import { decrypt } from './encryption.js';
+import logger from './logger.js';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'gemma3:latest';
 const MAX_CONTEXT_MESSAGES = 30;
 const TIMEOUT_MS = 120_000;
+const MAX_RETRIES = 3;
 
 export interface BackendConfig {
   base_url: string;
@@ -26,6 +29,19 @@ interface ChatCompletionOptions {
 
 interface ChatCompletionResponse {
   choices: { message: { role: string; content: string } }[];
+  usage?: { prompt_tokens: number; completion_tokens: number };
+}
+
+export interface UsageInfo {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  model?: string;
+}
+
+export interface StreamChunk {
+  type: 'token' | 'usage';
+  content?: string;
+  usage?: UsageInfo;
 }
 
 export function buildSystemPrompt(
@@ -68,9 +84,31 @@ export function buildSystemPrompt(
   return parts.join('\n\n');
 }
 
+function isRetryableError(err: any): boolean {
+  if (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT') return true;
+  const status = err.response?.status;
+  return status !== undefined && status >= 500;
+}
+
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  let lastError: any;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      if (!isRetryableError(err) || attempt === MAX_RETRIES - 1) throw err;
+      const delay = Math.pow(2, attempt) * 1000;
+      logger.warn({ attempt: attempt + 1, delay, err: err.message }, 'Retrying AI request');
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw lastError;
+}
+
 export async function* chatCompletionStream(
   options: ChatCompletionOptions & { signal?: AbortSignal }
-): AsyncGenerator<string, void, undefined> {
+): AsyncGenerator<StreamChunk, void, undefined> {
   const { model = DEFAULT_MODEL, messages, temperature = 0.7, backend, signal } = options;
 
   const systemMessages = messages.filter((m) => m.role === 'system');
@@ -87,13 +125,14 @@ export async function* chatCompletionStream(
     headers['OpenAI-Organization'] = backend.org_id;
   }
 
-  const { data: stream } = await axios.post(
+  const { data: stream } = await withRetry(() => axios.post(
     `${baseUrl}/v1/chat/completions`,
     {
       model,
       messages: finalMessages,
       temperature,
       stream: true,
+      stream_options: { include_usage: true },
     },
     {
       headers,
@@ -101,7 +140,7 @@ export async function* chatCompletionStream(
       timeout: TIMEOUT_MS,
       signal,
     }
-  );
+  ));
 
   let buffer = '';
 
@@ -118,7 +157,18 @@ export async function* chatCompletionStream(
       try {
         const parsed = JSON.parse(payload);
         const content = parsed.choices?.[0]?.delta?.content;
-        if (content) yield content;
+        if (content) yield { type: 'token', content };
+        // Capture usage from final chunk
+        if (parsed.usage) {
+          yield {
+            type: 'usage',
+            usage: {
+              prompt_tokens: parsed.usage.prompt_tokens,
+              completion_tokens: parsed.usage.completion_tokens,
+              model,
+            },
+          };
+        }
       } catch {
         // skip malformed JSON lines
       }
@@ -144,7 +194,7 @@ export async function chatCompletion(options: ChatCompletionOptions): Promise<st
     headers['OpenAI-Organization'] = backend.org_id;
   }
 
-  const { data } = await axios.post<ChatCompletionResponse>(
+  const { data } = await withRetry(() => axios.post<ChatCompletionResponse>(
     `${baseUrl}/v1/chat/completions`,
     {
       model,
@@ -152,7 +202,7 @@ export async function chatCompletion(options: ChatCompletionOptions): Promise<st
       temperature,
     },
     { timeout: TIMEOUT_MS, headers }
-  );
+  ));
 
   return data.choices[0]?.message?.content ?? '';
 }
@@ -172,7 +222,7 @@ export function resolveBackendConfig(
 
   return {
     base_url: row.base_url,
-    api_key: row.api_key,
+    api_key: decrypt(row.api_key),
     org_id: row.org_id,
   };
 }

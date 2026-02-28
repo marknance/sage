@@ -69,6 +69,7 @@ const LazyMessage = memo(function LazyMessage({
   onEdit,
   onDelete,
   onRetry,
+  onFork,
 }: {
   msg: Message;
   isStreaming: boolean;
@@ -76,6 +77,7 @@ const LazyMessage = memo(function LazyMessage({
   onEdit?: (msgId: number, content: string) => void;
   onDelete?: (msgId: number) => void;
   onRetry?: (content: string) => void;
+  onFork?: (msgId: number) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -127,8 +129,11 @@ const LazyMessage = memo(function LazyMessage({
             : 'bg-surface border border-border text-text-primary'
         }`}
       >
-        {msg.role === 'assistant' && msg.expert_name && (
-          <p className="text-xs font-medium text-primary mb-1">{msg.expert_name}</p>
+        {msg.role === 'assistant' && (msg.expert_name || msg.branch_label) && (
+          <div className="flex items-center gap-2 mb-1">
+            {msg.expert_name && <span className="text-xs font-medium text-primary">{msg.expert_name}</span>}
+            {msg.branch_label && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">{msg.branch_label}</span>}
+          </div>
         )}
         {isEditing ? (
           <div className="space-y-2">
@@ -160,10 +165,25 @@ const LazyMessage = memo(function LazyMessage({
         {isStreamingMsg && (
           <span className="inline-block w-2 h-4 bg-primary/70 animate-pulse ml-0.5 align-text-bottom rounded-sm" />
         )}
+        {msg.error && (
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-xs text-red-400">Failed to get response.</span>
+            {onRetry && (
+              <button onClick={() => onRetry(msg.content)} className="text-xs text-primary hover:underline font-medium">Retry</button>
+            )}
+          </div>
+        )}
         <div className="flex items-center justify-between mt-2">
-          <p className="text-xs text-text-muted">
-            {new Date(msg.created_at).toLocaleTimeString()}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-text-muted">
+              {new Date(msg.created_at).toLocaleTimeString()}
+            </p>
+            {msg.role === 'assistant' && msg.completion_tokens && (
+              <span className="text-[10px] text-text-muted bg-background px-1.5 py-0.5 rounded">
+                {msg.completion_tokens} tokens
+              </span>
+            )}
+          </div>
           {isReal && !isEditing && (
             <div className="hidden group-hover:flex gap-2">
               <button
@@ -180,8 +200,11 @@ const LazyMessage = memo(function LazyMessage({
                   Edit
                 </button>
               )}
-              {msg.role === 'assistant' && onRetry && (
+              {msg.role === 'assistant' && onRetry && !msg.error && (
                 <button onClick={() => onRetry(msg.content)} className="text-xs text-text-muted hover:text-primary">Retry</button>
+              )}
+              {msg.role === 'assistant' && onFork && isReal && (
+                <button onClick={() => onFork(msg.id)} className="text-xs text-text-muted hover:text-primary">Fork</button>
               )}
               <button onClick={() => onDelete?.(msg.id)} className="text-xs text-text-muted hover:text-red-400">Del</button>
             </div>
@@ -212,6 +235,8 @@ export default function ConversationPage() {
     updateConversation,
     deleteConversation,
     sendMessageStream,
+    retryMessage,
+    forkFromMessage,
     assignExpert,
     removeExpert,
     updateExpertOverride,
@@ -227,12 +252,16 @@ export default function ConversationPage() {
 
   const [input, setInput] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [modelsMap, setModelsMap] = useState<Record<string, string[]>>({});
   const [previewDoc, setPreviewDoc] = useState<{ filename: string; text: string } | null>(null);
   const [messageSearch, setMessageSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchMatchIndex, setSearchMatchIndex] = useState(0);
   const confirm = useConfirmStore((s) => s.confirm);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -285,13 +314,8 @@ export default function ConversationPage() {
   };
 
   const handleRetry = useCallback(async (assistantMsgId: number) => {
-    // Find the user message before this assistant message
-    const idx = messages.findIndex((m) => m.id === assistantMsgId);
-    const prevUserMsg = messages.slice(0, idx).reverse().find((m) => m.role === 'user');
-    if (!prevUserMsg) return;
-    await deleteMessage(convId, assistantMsgId);
-    await sendMessageStream(convId, prevUserMsg.content);
-  }, [messages, convId, deleteMessage, sendMessageStream]);
+    await retryMessage(convId, assistantMsgId);
+  }, [convId, retryMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -330,6 +354,50 @@ export default function ConversationPage() {
   }, [convId, uploadDocument]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop });
+
+  // @mention autocomplete
+  const mentionExperts = mentionQuery !== null
+    ? allExperts.filter((e) => e.name.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 6)
+    : [];
+
+  const insertMention = useCallback((expertName: string) => {
+    const textarea = inputRef.current;
+    if (!textarea) return;
+    const val = input;
+    const cursor = textarea.selectionStart;
+    // Find the @mention start
+    const before = val.slice(0, cursor);
+    const atIdx = before.lastIndexOf('@');
+    if (atIdx < 0) return;
+    const newVal = val.slice(0, atIdx) + '@' + expertName + ' ' + val.slice(cursor);
+    setInput(newVal);
+    setMentionQuery(null);
+    setMentionIndex(0);
+    setTimeout(() => {
+      textarea.focus();
+      const newCursor = atIdx + expertName.length + 2;
+      textarea.setSelectionRange(newCursor, newCursor);
+    }, 0);
+  }, [input]);
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setInput(val);
+    const el = e.target;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 150)}px`;
+
+    // Detect @mention
+    const cursor = el.selectionStart;
+    const before = val.slice(0, cursor);
+    const atMatch = before.match(/@([\w\s]*)$/);
+    if (atMatch) {
+      setMentionQuery(atMatch[1]);
+      setMentionIndex(0);
+    } else {
+      setMentionQuery(null);
+    }
+  }, []);
 
   // Available experts (not yet assigned)
   const filteredMessages = messageSearch
@@ -376,13 +444,13 @@ export default function ConversationPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <input
-            type="text"
-            placeholder="Search messages..."
-            value={messageSearch}
-            onChange={(e) => setMessageSearch(e.target.value)}
-            className="px-3 py-1.5 rounded-lg border border-border text-text-primary text-sm bg-surface focus:outline-none focus:border-primary w-40"
-          />
+          <button
+            onClick={() => { setSearchOpen(!searchOpen); if (searchOpen) { setMessageSearch(''); setSearchMatchIndex(0); } }}
+            className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${searchOpen ? 'border-primary text-primary' : 'border-border text-text-secondary hover:text-text-primary'}`}
+            title="Search messages (Ctrl+F)"
+          >
+            Search
+          </button>
           <select
             defaultValue=""
             onChange={(e) => {
@@ -420,6 +488,37 @@ export default function ConversationPage() {
           </button>
         </div>
       </div>
+
+      {/* Search bar */}
+      {searchOpen && (
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-surface shrink-0">
+          <input
+            autoFocus
+            type="text"
+            placeholder="Search messages..."
+            value={messageSearch}
+            onChange={(e) => { setMessageSearch(e.target.value); setSearchMatchIndex(0); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') { setSearchOpen(false); setMessageSearch(''); setSearchMatchIndex(0); }
+              else if (e.key === 'Enter') {
+                if (e.shiftKey) setSearchMatchIndex((i) => Math.max(0, i - 1));
+                else setSearchMatchIndex((i) => Math.min(filteredMessages.length - 1, i + 1));
+              }
+            }}
+            className="flex-1 px-3 py-1.5 rounded-lg border border-border text-text-primary text-sm bg-background focus:outline-none focus:border-primary"
+          />
+          {messageSearch && (
+            <>
+              <span className="text-xs text-text-muted whitespace-nowrap">
+                {filteredMessages.length > 0 ? `${searchMatchIndex + 1} of ${filteredMessages.length}` : '0 matches'}
+              </span>
+              <button onClick={() => setSearchMatchIndex((i) => Math.max(0, i - 1))} className="text-text-muted hover:text-text-primary text-sm px-1">&uarr;</button>
+              <button onClick={() => setSearchMatchIndex((i) => Math.min(filteredMessages.length - 1, i + 1))} className="text-text-muted hover:text-text-primary text-sm px-1">&darr;</button>
+            </>
+          )}
+          <button onClick={() => { setSearchOpen(false); setMessageSearch(''); setSearchMatchIndex(0); }} className="text-text-muted hover:text-text-primary text-xs">Close</button>
+        </div>
+      )}
 
       <div className="flex flex-1 overflow-hidden">
         {/* Main chat area */}
@@ -465,11 +564,7 @@ export default function ConversationPage() {
                 <p>No messages yet. Start the conversation!</p>
               </div>
             )}
-            {messageSearch && (
-              <p className="text-xs text-text-muted text-center py-1">
-                {filteredMessages.length} of {messages.length} messages match
-              </p>
-            )}
+            {/* search match count shown in search bar above */}
             {filteredMessages.map((msg) => (
               <LazyMessage
                 key={msg.id}
@@ -479,6 +574,7 @@ export default function ConversationPage() {
                 onEdit={(msgId, content) => editMessage(convId, msgId, content)}
                 onDelete={(msgId) => deleteMessage(convId, msgId)}
                 onRetry={() => handleRetry(msg.id)}
+                onFork={(msgId) => forkFromMessage(convId, msgId)}
               />
             ))}
             {isSending && !isStreaming && (
@@ -494,20 +590,39 @@ export default function ConversationPage() {
           {/* Input */}
           <div className="px-4 py-3 border-t border-border bg-surface shrink-0">
             <div className="flex gap-2">
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value);
-                  const el = e.target;
-                  el.style.height = 'auto';
-                  el.style.height = `${Math.min(el.scrollHeight, 150)}px`;
-                }}
-                onKeyDown={handleKeyDown}
-                placeholder="Type a message... (Shift+Enter for new line)"
-                rows={1}
-                className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-text-primary resize-none focus:outline-none focus:border-primary"
-              />
+              <div className="flex-1 relative">
+                {mentionQuery !== null && mentionExperts.length > 0 && (
+                  <div className="absolute bottom-full left-0 mb-1 w-64 bg-surface border border-border rounded-lg shadow-lg py-1 z-20 max-h-48 overflow-y-auto">
+                    {mentionExperts.map((expert, i) => (
+                      <button
+                        key={expert.id}
+                        onClick={() => insertMention(expert.name)}
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors ${i === mentionIndex ? 'bg-primary/10 text-primary' : 'text-text-primary hover:bg-background'}`}
+                      >
+                        <span className="font-medium">{expert.name}</span>
+                        <span className="text-text-muted ml-2 text-xs">{expert.domain}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <textarea
+                  ref={inputRef}
+                  value={input}
+                  onChange={handleInputChange}
+                  onKeyDown={(e) => {
+                    if (mentionQuery !== null && mentionExperts.length > 0) {
+                      if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIndex((i) => Math.min(mentionExperts.length - 1, i + 1)); return; }
+                      if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIndex((i) => Math.max(0, i - 1)); return; }
+                      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); insertMention(mentionExperts[mentionIndex].name); return; }
+                      if (e.key === 'Escape') { setMentionQuery(null); return; }
+                    }
+                    handleKeyDown(e);
+                  }}
+                  placeholder="Type a message... (@expert to mention, Shift+Enter for new line)"
+                  rows={1}
+                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary resize-none focus:outline-none focus:border-primary"
+                />
+              </div>
               <button
                 onClick={handleSend}
                 disabled={isSending || !input.trim()}

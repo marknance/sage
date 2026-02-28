@@ -13,7 +13,10 @@ import conversationsRouter from './routes/conversations.js';
 import backendsRouter from './routes/backends.js';
 import settingsRouter from './routes/settings.js';
 import adminRouter from './routes/admin.js';
+import tagsRouter from './routes/tags.js';
 import { authLimiter, apiLimiter, streamLimiter } from './middleware/rateLimit.js';
+import logger from './services/logger.js';
+import { encrypt } from './services/encryption.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -179,6 +182,84 @@ try {
   // Column already exists
 }
 
+// Migration: add branching columns to messages
+try {
+  db.exec('ALTER TABLE messages ADD COLUMN parent_message_id INTEGER');
+} catch {
+  // Column already exists
+}
+try {
+  db.exec('ALTER TABLE messages ADD COLUMN branch_label TEXT');
+} catch {
+  // Column already exists
+}
+try {
+  db.exec('CREATE INDEX IF NOT EXISTS idx_messages_parent ON messages(parent_message_id)');
+} catch {
+  // Index already exists
+}
+
+// Migration: add token tracking columns to messages
+try {
+  db.exec('ALTER TABLE messages ADD COLUMN prompt_tokens INTEGER');
+} catch {
+  // Column already exists
+}
+try {
+  db.exec('ALTER TABLE messages ADD COLUMN completion_tokens INTEGER');
+} catch {
+  // Column already exists
+}
+try {
+  db.exec('ALTER TABLE messages ADD COLUMN model TEXT');
+} catch {
+  // Column already exists
+}
+
+// Create tags tables
+db.exec(`
+  CREATE TABLE IF NOT EXISTS tags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    color TEXT DEFAULT '#6366f1',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, name)
+  );
+
+  CREATE TABLE IF NOT EXISTS conversation_tags (
+    conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE,
+    tag_id INTEGER REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (conversation_id, tag_id)
+  )
+`);
+
+// Create usage_stats table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS usage_stats (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,
+    total_prompt_tokens INTEGER DEFAULT 0,
+    total_completion_tokens INTEGER DEFAULT 0,
+    total_messages INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, date)
+  )
+`);
+
+// Migration: encrypt existing plaintext API keys
+{
+  const rows = db.prepare("SELECT id, api_key FROM ai_backends WHERE api_key IS NOT NULL AND api_key != '' AND api_key NOT LIKE 'enc:%'").all() as { id: number; api_key: string }[];
+  if (rows.length > 0) {
+    const update = db.prepare('UPDATE ai_backends SET api_key = ? WHERE id = ?');
+    for (const row of rows) {
+      update.run(encrypt(row.api_key), row.id);
+    }
+    logger.info({ count: rows.length }, 'Encrypted existing plaintext API keys');
+  }
+}
+
 // Seed admin user if not exists
 const existingAdmin = db.prepare('SELECT id FROM users WHERE email = ?').get('admin@sage.local');
 if (!existingAdmin) {
@@ -186,7 +267,7 @@ if (!existingAdmin) {
   db.prepare(
     'INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)'
   ).run('Admin', 'admin@sage.local', passwordHash, 'admin');
-  console.log('Seeded admin user: admin@sage.local / admin123');
+  logger.info('Seeded admin user: admin@sage.local / admin123');
 }
 
 // Ensure uploads directory exists
@@ -209,6 +290,7 @@ app.use('/api/conversations', conversationsRouter);
 app.use('/api/backends', backendsRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/tags', tagsRouter);
 
 // Health endpoint
 app.get('/api/health', (_req, res) => {
@@ -225,8 +307,8 @@ app.get('/api/health', (_req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Sage server running on http://localhost:${PORT}`);
-  console.log(`Database: ${dbPath}`);
+  logger.info({ port: PORT }, `Sage server running on http://localhost:${PORT}`);
+  logger.info({ dbPath }, 'Database initialized');
 });
 
 export { app, db };

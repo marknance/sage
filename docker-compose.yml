@@ -1,0 +1,16 @@
+services:
+  sage:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - sage-data:/app/server/data
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-sage-production-secret-change-me}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - NODE_ENV=production
+    restart: unless-stopped
+
+volumes:
+  sage-data:

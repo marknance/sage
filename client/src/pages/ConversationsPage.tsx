@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { api } from '../lib/api';
 import { useConversationStore } from '../stores/conversationStore';
 import { useConfirmStore } from '../stores/confirmStore';
+import { useTagStore, type Tag } from '../stores/tagStore';
 import { SkeletonGrid } from '../components/Skeleton';
 
 export default function ConversationsPage() {
@@ -24,16 +25,22 @@ export default function ConversationsPage() {
   const [pinnedOnly, setPinnedOnly] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [filterTag, setFilterTag] = useState('');
+  const { tags: allTags, fetchTags } = useTagStore();
   const confirm = useConfirmStore((s) => s.confirm);
 
   useEffect(() => {
+    fetchTags();
+  }, [fetchTags]);
+
+  useEffect(() => {
     setPage(0); // reset page on filter change
-  }, [search, sort, filterType, pinnedOnly]);
+  }, [search, sort, filterType, pinnedOnly, filterTag]);
 
   useEffect(() => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      fetchConversations({ search: search || undefined, sort, type: filterType || undefined, pinned: pinnedOnly ? '1' : undefined, offset: page * 24 });
+      fetchConversations({ search: search || undefined, sort, type: filterType || undefined, pinned: pinnedOnly ? '1' : undefined, tag: filterTag || undefined, offset: page * 24 });
     }, search ? 300 : 0);
     return () => clearTimeout(debounceRef.current);
   }, [search, sort, filterType, pinnedOnly, page, fetchConversations]);
@@ -132,6 +139,18 @@ export default function ConversationsPage() {
             <option value="brainstorm">Brainstorm</option>
             <option value="debug">Debug</option>
           </select>
+          {allTags.length > 0 && (
+            <select
+              value={filterTag}
+              onChange={(e) => setFilterTag(e.target.value)}
+              className="px-3 py-2 rounded-lg bg-surface border border-border text-text-primary focus:outline-none focus:border-primary"
+            >
+              <option value="">All Tags</option>
+              {allTags.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          )}
           <label className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm text-text-secondary">
             <input
               type="checkbox"
@@ -215,6 +234,13 @@ export default function ConversationsPage() {
                       <span>{conv.expert_count || 0} expert{conv.expert_count !== 1 ? 's' : ''} &middot; {conv.message_count || 0} msg{conv.message_count !== 1 ? 's' : ''}</span>
                       <span>{new Date(conv.updated_at).toLocaleDateString()}</span>
                     </div>
+                    {conv.tags && conv.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {conv.tags.map((tag) => (
+                          <span key={tag.id} className="px-2 py-0.5 rounded-full text-[10px] text-white" style={{ backgroundColor: tag.color }}>{tag.name}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <Link to={`/conversations/${conv.id}`} className="block">
@@ -231,6 +257,13 @@ export default function ConversationsPage() {
                       <span>{conv.expert_count || 0} expert{conv.expert_count !== 1 ? 's' : ''} &middot; {conv.message_count || 0} msg{conv.message_count !== 1 ? 's' : ''}</span>
                       <span>{new Date(conv.updated_at).toLocaleDateString()}</span>
                     </div>
+                    {conv.tags && conv.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {conv.tags.map((tag) => (
+                          <span key={tag.id} className="px-2 py-0.5 rounded-full text-[10px] text-white" style={{ backgroundColor: tag.color }}>{tag.name}</span>
+                        ))}
+                      </div>
+                    )}
                   </Link>
                 )}
               </div>

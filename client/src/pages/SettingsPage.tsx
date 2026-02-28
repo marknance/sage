@@ -7,7 +7,7 @@ import { useConfirmStore } from '../stores/confirmStore';
 import { toast } from '../stores/toastStore';
 import { api } from '../lib/api';
 
-type Tab = 'profile' | 'defaults' | 'users' | 'content' | 'stats';
+type Tab = 'profile' | 'defaults' | 'usage' | 'users' | 'content' | 'stats';
 type ContentSubTab = 'conversations' | 'experts';
 
 function formatBytes(bytes: number): string {
@@ -160,9 +160,20 @@ export default function SettingsPage() {
     }
   }
 
+  // Usage stats state
+  const [usageStats, setUsageStats] = useState<{ date: string; total_prompt_tokens: number; total_completion_tokens: number; total_messages: number }[]>([]);
+  useEffect(() => {
+    if (activeTab === 'usage') {
+      api<{ stats: typeof usageStats }>('/api/conversations/usage?days=30')
+        .then(({ stats }) => setUsageStats(stats))
+        .catch(() => setUsageStats([]));
+    }
+  }, [activeTab]);
+
   const tabs: { key: Tab; label: string; adminOnly?: boolean }[] = [
     { key: 'profile', label: 'Profile' },
     { key: 'defaults', label: 'Defaults' },
+    { key: 'usage', label: 'Usage' },
     ...(isAdmin ? [
       { key: 'users' as Tab, label: 'Users', adminOnly: true },
       { key: 'content' as Tab, label: 'Content', adminOnly: true },
@@ -323,6 +334,51 @@ export default function SettingsPage() {
               <p className="mt-3 text-sm text-text-muted">
                 No backends configured. <Link to="/backends/new" className="text-primary hover:underline">Add one</Link>
               </p>
+            )}
+          </div>
+        )}
+
+        {/* Usage Tab */}
+        {activeTab === 'usage' && (
+          <div className="bg-surface rounded-xl border border-border p-6">
+            <h2 className="text-lg font-semibold text-text-primary mb-4">Token Usage (Last 30 Days)</h2>
+            {usageStats.length === 0 ? (
+              <p className="text-text-muted text-sm">No usage data yet. Start a conversation to track token usage.</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  <div className="bg-background rounded-lg p-4">
+                    <p className="text-xs text-text-muted mb-1">Total Messages</p>
+                    <p className="text-xl font-semibold text-text-primary">{usageStats.reduce((a, s) => a + s.total_messages, 0)}</p>
+                  </div>
+                  <div className="bg-background rounded-lg p-4">
+                    <p className="text-xs text-text-muted mb-1">Prompt Tokens</p>
+                    <p className="text-xl font-semibold text-text-primary">{usageStats.reduce((a, s) => a + s.total_prompt_tokens, 0).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-background rounded-lg p-4">
+                    <p className="text-xs text-text-muted mb-1">Completion Tokens</p>
+                    <p className="text-xl font-semibold text-text-primary">{usageStats.reduce((a, s) => a + s.total_completion_tokens, 0).toLocaleString()}</p>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  {(() => {
+                    const maxTokens = Math.max(...usageStats.map((s) => s.total_prompt_tokens + s.total_completion_tokens), 1);
+                    return usageStats.map((s) => {
+                      const total = s.total_prompt_tokens + s.total_completion_tokens;
+                      const pct = (total / maxTokens) * 100;
+                      return (
+                        <div key={s.date} className="flex items-center gap-2">
+                          <span className="text-[10px] text-text-muted w-16 shrink-0">{s.date.slice(5)}</span>
+                          <div className="flex-1 h-4 bg-background rounded overflow-hidden">
+                            <div className="h-full bg-primary/60 rounded" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-[10px] text-text-muted w-16 text-right shrink-0">{total.toLocaleString()}</span>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </>
             )}
           </div>
         )}

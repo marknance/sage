@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -6,15 +7,17 @@ import ToastContainer from './components/Toast';
 import ConfirmModal from './components/ConfirmModal';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
-import ExpertsPage from './pages/ExpertsPage';
-import ExpertCreatePage from './pages/ExpertCreatePage';
-import ExpertDetailPage from './pages/ExpertDetailPage';
-import ConversationsPage from './pages/ConversationsPage';
-import ConversationPage from './pages/ConversationPage';
-import BackendsPage from './pages/BackendsPage';
-import BackendFormPage from './pages/BackendFormPage';
-import CategoriesPage from './pages/CategoriesPage';
-import SettingsPage from './pages/SettingsPage';
+import { Spinner } from './components/Skeleton';
+
+const ExpertsPage = lazy(() => import('./pages/ExpertsPage'));
+const ExpertCreatePage = lazy(() => import('./pages/ExpertCreatePage'));
+const ExpertDetailPage = lazy(() => import('./pages/ExpertDetailPage'));
+const ConversationsPage = lazy(() => import('./pages/ConversationsPage'));
+const ConversationPage = lazy(() => import('./pages/ConversationPage'));
+const BackendsPage = lazy(() => import('./pages/BackendsPage'));
+const BackendFormPage = lazy(() => import('./pages/BackendFormPage'));
+const CategoriesPage = lazy(() => import('./pages/CategoriesPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,6 +35,7 @@ function App() {
       <ConfirmModal />
       <BrowserRouter>
         <ErrorBoundary>
+        <Suspense fallback={<Spinner />}>
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
@@ -58,6 +62,7 @@ function App() {
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
         </ErrorBoundary>
       </BrowserRouter>
     </QueryClientProvider>

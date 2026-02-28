@@ -5,8 +5,9 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { db } from '../index.js';
 import { authenticate } from '../middleware/auth.js';
-import { chatCompletion, chatCompletionStream, buildSystemPrompt, resolveBackendConfig } from '../services/ollama.js';
+import { chatCompletion, chatCompletionStream, buildSystemPrompt, resolveBackendConfig, type UsageInfo } from '../services/ollama.js';
 import { isWithinLength } from '../lib/validate.js';
+import logger from '../services/logger.js';
 import { PDFParse } from 'pdf-parse';
 import mammoth from 'mammoth';
 
@@ -48,6 +49,11 @@ router.get('/', (req, res) => {
   `;
   const params: any[] = [userId];
 
+  if (req.query.tag && typeof req.query.tag === 'string') {
+    query += ` AND EXISTS (SELECT 1 FROM conversation_tags ct WHERE ct.conversation_id = c.id AND ct.tag_id = ?)`;
+    params.push(req.query.tag);
+  }
+
   if (search && typeof search === 'string') {
     const term = `%${search}%`;
     query += ` AND (c.title LIKE ? OR EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.content LIKE ?))`;
@@ -80,7 +86,18 @@ router.get('/', (req, res) => {
   const offset = Math.max(Number(req.query.offset) || 0, 0);
   query += ` LIMIT ? OFFSET ?`;
 
-  const conversations = db.prepare(query).all(...params, limit, offset);
+  const conversations = db.prepare(query).all(...params, limit, offset) as any[];
+
+  // Enrich with tags
+  const getTagsStmt = db.prepare(`
+    SELECT t.id, t.name, t.color FROM tags t
+    JOIN conversation_tags ct ON ct.tag_id = t.id
+    WHERE ct.conversation_id = ?
+  `);
+  for (const conv of conversations) {
+    conv.tags = getTagsStmt.all(conv.id);
+  }
+
   res.json({ conversations, total, limit, offset });
 });
 
@@ -124,7 +141,8 @@ router.get('/:id', (req, res) => {
   const before = req.query.before ? Number(req.query.before) : null;
 
   let msgQuery = `
-    SELECT m.*, e.name as expert_name
+    SELECT m.*, e.name as expert_name,
+      (SELECT COUNT(*) FROM messages m2 WHERE m2.parent_message_id = m.id OR (m.parent_message_id IS NOT NULL AND m2.parent_message_id = m.parent_message_id AND m2.id != m.id)) as sibling_count
     FROM messages m
     LEFT JOIN experts e ON e.id = m.expert_id
     WHERE m.conversation_id = ?
@@ -491,12 +509,30 @@ router.post('/:id/messages/stream', async (req, res) => {
       return;
     }
 
-    const { content } = req.body;
+    let { content } = req.body;
     if (!content || typeof content !== 'string') {
       sendEvent('error', { message: 'content is required' });
       sendEvent('done', {});
       res.end();
       return;
+    }
+
+    // Parse @mention to auto-assign expert
+    const mentionMatch = content.match(/@([\w][\w\s]*?)(?=\s|$)/);
+    if (mentionMatch) {
+      const mentionName = mentionMatch[1].trim();
+      const mentionedExpert = db.prepare('SELECT id FROM experts WHERE user_id = ? AND LOWER(name) = LOWER(?)')
+        .get(req.user!.id, mentionName) as { id: number } | undefined;
+      if (mentionedExpert) {
+        // Auto-assign if not already assigned
+        const alreadyAssigned = db.prepare('SELECT id FROM conversation_experts WHERE conversation_id = ? AND expert_id = ?')
+          .get(req.params.id, mentionedExpert.id);
+        if (!alreadyAssigned) {
+          db.prepare('INSERT INTO conversation_experts (conversation_id, expert_id) VALUES (?, ?)').run(req.params.id, mentionedExpert.id);
+        }
+        // Strip mention from content sent to AI
+        content = content.replace(mentionMatch[0], '').trim();
+      }
     }
 
     // Save user message
@@ -530,17 +566,26 @@ router.post('/:id/messages/stream', async (req, res) => {
       const defaultBackend = resolveBackendConfig(null, userSettings?.default_backend_id, db);
 
       let fullContent = '';
-      for await (const token of chatCompletionStream({ messages, backend: defaultBackend, signal: abortController.signal })) {
+      let usageInfo: UsageInfo | undefined;
+      for await (const chunk of chatCompletionStream({ messages, backend: defaultBackend, signal: abortController.signal })) {
         if (disconnected) break;
-        fullContent += token;
-        sendEvent('token', { content: token });
+        if (chunk.type === 'token' && chunk.content) {
+          fullContent += chunk.content;
+          sendEvent('token', { content: chunk.content });
+        } else if (chunk.type === 'usage' && chunk.usage) {
+          usageInfo = chunk.usage;
+        }
       }
 
       if (!disconnected) {
-        const result = db.prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)')
-          .run(req.params.id, 'assistant', fullContent);
+        const result = db.prepare('INSERT INTO messages (conversation_id, role, content, prompt_tokens, completion_tokens, model) VALUES (?, ?, ?, ?, ?, ?)')
+          .run(req.params.id, 'assistant', fullContent, usageInfo?.prompt_tokens ?? null, usageInfo?.completion_tokens ?? null, usageInfo?.model ?? null);
         const saved = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
         sendEvent('expert_end', saved);
+        if (usageInfo) {
+          sendEvent('usage', usageInfo);
+          updateUsageStats(req.user!.id, usageInfo);
+        }
 
         if (conversation.auto_suggest_experts) {
           const suggested = findSuggestedExperts(req.user!.id, content, assignedExperts);
@@ -556,19 +601,28 @@ router.post('/:id/messages/stream', async (req, res) => {
         .all(req.params.id) as { role: string; content: string }[];
 
       let fullContent = '';
-      for await (const token of getExpertResponseStream(expert, history, req.params.id, req.user!.id, abortController.signal)) {
+      let usageInfo: UsageInfo | undefined;
+      for await (const chunk of getExpertResponseStream(expert, history, req.params.id, req.user!.id, abortController.signal)) {
         if (disconnected) break;
-        fullContent += token;
-        sendEvent('token', { content: token });
+        if (chunk.type === 'token' && chunk.content) {
+          fullContent += chunk.content;
+          sendEvent('token', { content: chunk.content });
+        } else if (chunk.type === 'usage' && chunk.usage) {
+          usageInfo = chunk.usage;
+        }
       }
 
       if (!disconnected) {
-        const result = db.prepare('INSERT INTO messages (conversation_id, expert_id, role, content) VALUES (?, ?, ?, ?)')
-          .run(req.params.id, expert.id, 'assistant', fullContent);
+        const result = db.prepare('INSERT INTO messages (conversation_id, expert_id, role, content, prompt_tokens, completion_tokens, model) VALUES (?, ?, ?, ?, ?, ?, ?)')
+          .run(req.params.id, expert.id, 'assistant', fullContent, usageInfo?.prompt_tokens ?? null, usageInfo?.completion_tokens ?? null, usageInfo?.model ?? null);
         const saved = db.prepare('SELECT m.*, e.name as expert_name FROM messages m LEFT JOIN experts e ON e.id = m.expert_id WHERE m.id = ?')
           .get(result.lastInsertRowid);
         sendEvent('expert_end', saved);
         db.prepare('UPDATE experts SET last_used_at = CURRENT_TIMESTAMP WHERE id = ?').run(expert.id);
+        if (usageInfo) {
+          sendEvent('usage', usageInfo);
+          updateUsageStats(req.user!.id, usageInfo);
+        }
       }
     } else {
       // Debate mode — each expert responds sequentially
@@ -581,19 +635,28 @@ router.post('/:id/messages/stream', async (req, res) => {
           .all(req.params.id) as { role: string; content: string }[];
 
         let fullContent = '';
-        for await (const token of getExpertResponseStream(expert, currentHistory, req.params.id, req.user!.id, abortController.signal)) {
+        let usageInfo: UsageInfo | undefined;
+        for await (const chunk of getExpertResponseStream(expert, currentHistory, req.params.id, req.user!.id, abortController.signal)) {
           if (disconnected) break;
-          fullContent += token;
-          sendEvent('token', { content: token });
+          if (chunk.type === 'token' && chunk.content) {
+            fullContent += chunk.content;
+            sendEvent('token', { content: chunk.content });
+          } else if (chunk.type === 'usage' && chunk.usage) {
+            usageInfo = chunk.usage;
+          }
         }
 
         if (!disconnected) {
-          const result = db.prepare('INSERT INTO messages (conversation_id, expert_id, role, content) VALUES (?, ?, ?, ?)')
-            .run(req.params.id, expert.id, 'assistant', fullContent);
+          const result = db.prepare('INSERT INTO messages (conversation_id, expert_id, role, content, prompt_tokens, completion_tokens, model) VALUES (?, ?, ?, ?, ?, ?, ?)')
+            .run(req.params.id, expert.id, 'assistant', fullContent, usageInfo?.prompt_tokens ?? null, usageInfo?.completion_tokens ?? null, usageInfo?.model ?? null);
           const saved = db.prepare('SELECT m.*, e.name as expert_name FROM messages m LEFT JOIN experts e ON e.id = m.expert_id WHERE m.id = ?')
             .get(result.lastInsertRowid);
           sendEvent('expert_end', saved);
           db.prepare('UPDATE experts SET last_used_at = CURRENT_TIMESTAMP WHERE id = ?').run(expert.id);
+          if (usageInfo) {
+            sendEvent('usage', usageInfo);
+            updateUsageStats(req.user!.id, usageInfo);
+          }
         }
       }
     }
@@ -624,7 +687,7 @@ router.post('/:id/messages/stream', async (req, res) => {
       for (const expert of assignedExperts) {
         if (expert.memory_enabled) {
           extractMemories(expert, Number(req.params.id), req.user!.id).catch((err) =>
-            console.error('Memory extraction failed:', err.message)
+            logger.error({ err: err.message }, 'Memory extraction failed')
           );
         }
       }
@@ -636,7 +699,7 @@ router.post('/:id/messages/stream', async (req, res) => {
       res.end();
       return;
     }
-    console.error('Stream error:', err.message);
+    logger.error({ err: err.message }, 'Stream error');
     try {
       sendEvent('error', { message: 'Failed to get AI response. Is the backend running?' });
       sendEvent('done', {});
@@ -749,7 +812,7 @@ router.post('/:id/messages', async (req, res) => {
 
     res.json({ messages: responseMessages, suggestedExperts });
   } catch (err: any) {
-    console.error('Message error:', err.message);
+    logger.error({ err: err.message }, 'Message error');
     res.status(500).json({ error: 'Failed to get AI response. Is Ollama running?' });
   }
 });
@@ -795,7 +858,7 @@ function getExpertResponseStream(
   conversationId: string,
   userId: number,
   signal: AbortSignal
-): AsyncGenerator<string, void, undefined> {
+) {
   const behaviors = db.prepare('SELECT behavior_key FROM expert_behaviors WHERE expert_id = ? AND enabled = 1')
     .all(expert.id) as { behavior_key: string }[];
   const enabledBehaviors = behaviors.map((b) => b.behavior_key);
@@ -843,7 +906,7 @@ async function generateTitle(
       return cleaned;
     }
   } catch (err) {
-    console.error('Title generation error:', err);
+    logger.error({ err }, 'Title generation error');
   }
   return null;
 }
@@ -911,8 +974,20 @@ Return JSON array only:`;
     }
   } catch (err) {
     // Extraction is best-effort, don't fail the conversation
-    console.error('Memory extraction error:', err);
+    logger.error({ err }, 'Memory extraction error');
   }
+}
+
+function updateUsageStats(userId: number, usage: UsageInfo): void {
+  const today = new Date().toISOString().slice(0, 10);
+  db.prepare(`
+    INSERT INTO usage_stats (user_id, date, total_prompt_tokens, total_completion_tokens, total_messages)
+    VALUES (?, ?, ?, ?, 1)
+    ON CONFLICT(user_id, date) DO UPDATE SET
+      total_prompt_tokens = total_prompt_tokens + excluded.total_prompt_tokens,
+      total_completion_tokens = total_completion_tokens + excluded.total_completion_tokens,
+      total_messages = total_messages + 1
+  `).run(userId, today, usage.prompt_tokens ?? 0, usage.completion_tokens ?? 0);
 }
 
 function findSuggestedExperts(userId: number, messageContent: string, excludeExperts: any[]): any[] {
@@ -927,6 +1002,162 @@ function findSuggestedExperts(userId: number, messageContent: string, excludeExp
     return keywords.some((kw: string) => kw.length > 2 && lowerContent.includes(kw));
   });
 }
+
+// POST /:id/messages/:messageId/branch — create a branch from a message
+router.post('/:id/messages/:messageId/branch', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const sendEvent = (event: string, data: any) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const abortController = new AbortController();
+  let disconnected = false;
+  res.on('close', () => {
+    if (!res.writableFinished) {
+      disconnected = true;
+      abortController.abort();
+    }
+  });
+
+  try {
+    const conversation = db.prepare('SELECT * FROM conversations WHERE id = ? AND user_id = ?')
+      .get(req.params.id, req.user!.id) as any;
+    if (!conversation) {
+      sendEvent('error', { message: 'Conversation not found' });
+      sendEvent('done', {});
+      res.end();
+      return;
+    }
+
+    const originalMsg = db.prepare('SELECT * FROM messages WHERE id = ? AND conversation_id = ?')
+      .get(req.params.messageId, req.params.id) as any;
+    if (!originalMsg) {
+      sendEvent('error', { message: 'Message not found' });
+      sendEvent('done', {});
+      res.end();
+      return;
+    }
+
+    // Find the user message that preceded this assistant message
+    const userMsg = db.prepare(`
+      SELECT * FROM messages WHERE conversation_id = ? AND id < ? AND role = 'user'
+      ORDER BY id DESC LIMIT 1
+    `).get(req.params.id, originalMsg.id) as any;
+
+    if (!userMsg) {
+      sendEvent('error', { message: 'No user message found before this message' });
+      sendEvent('done', {});
+      res.end();
+      return;
+    }
+
+    // Count existing branches from this user message to generate label
+    const branchCount = (db.prepare(
+      "SELECT COUNT(*) as count FROM messages WHERE parent_message_id = ? AND role = 'assistant'"
+    ).get(userMsg.id) as { count: number }).count;
+    const branchLabel = `Branch ${branchCount + 2}`;
+
+    // Get history up to the user message
+    const history = db.prepare(`
+      SELECT role, content FROM messages WHERE conversation_id = ? AND id <= ?
+      ORDER BY created_at ASC
+    `).all(req.params.id, userMsg.id) as { role: string; content: string }[];
+
+    // Get assigned experts
+    const assignedExperts = db.prepare(`
+      SELECT e.*, ce.backend_override_id, ce.model_override as conv_model_override
+      FROM conversation_experts ce
+      JOIN experts e ON e.id = ce.expert_id
+      WHERE ce.conversation_id = ?
+    `).all(req.params.id) as any[];
+
+    sendEvent('branch_start', { parent_message_id: userMsg.id, branch_label: branchLabel });
+
+    // Stream new response
+    const expert = assignedExperts.length > 0 ? assignedExperts[0] : null;
+    let fullContent = '';
+    let usageInfo: UsageInfo | undefined;
+
+    if (expert) {
+      sendEvent('expert_start', { expert_id: expert.id, expert_name: expert.name, message_index: 0 });
+      for await (const chunk of getExpertResponseStream(expert, history, req.params.id, req.user!.id, abortController.signal)) {
+        if (disconnected) break;
+        if (chunk.type === 'token' && chunk.content) {
+          fullContent += chunk.content;
+          sendEvent('token', { content: chunk.content });
+        } else if (chunk.type === 'usage' && chunk.usage) {
+          usageInfo = chunk.usage;
+        }
+      }
+    } else {
+      sendEvent('expert_start', { expert_id: null, expert_name: null, message_index: 0 });
+      const docContext = getDocumentContext(req.params.id);
+      const messages = [
+        { role: 'system' as const, content: getTypePrefix(conversation.type) + 'You are a helpful AI assistant.' + docContext },
+        ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      ];
+      const userSettings = db.prepare('SELECT default_backend_id FROM settings WHERE user_id = ?')
+        .get(req.user!.id) as { default_backend_id: number | null } | undefined;
+      const defaultBackend = resolveBackendConfig(null, userSettings?.default_backend_id, db);
+      for await (const chunk of chatCompletionStream({ messages, backend: defaultBackend, signal: abortController.signal })) {
+        if (disconnected) break;
+        if (chunk.type === 'token' && chunk.content) {
+          fullContent += chunk.content;
+          sendEvent('token', { content: chunk.content });
+        } else if (chunk.type === 'usage' && chunk.usage) {
+          usageInfo = chunk.usage;
+        }
+      }
+    }
+
+    if (!disconnected) {
+      const result = db.prepare(
+        'INSERT INTO messages (conversation_id, expert_id, role, content, parent_message_id, branch_label, prompt_tokens, completion_tokens, model) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(
+        req.params.id, expert?.id ?? null, 'assistant', fullContent,
+        userMsg.id, branchLabel,
+        usageInfo?.prompt_tokens ?? null, usageInfo?.completion_tokens ?? null, usageInfo?.model ?? null
+      );
+      const saved = db.prepare('SELECT m.*, e.name as expert_name FROM messages m LEFT JOIN experts e ON e.id = m.expert_id WHERE m.id = ?')
+        .get(result.lastInsertRowid);
+      sendEvent('expert_end', saved);
+      if (usageInfo) {
+        sendEvent('usage', usageInfo);
+        updateUsageStats(req.user!.id, usageInfo);
+      }
+      sendEvent('done', {});
+    }
+    res.end();
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      res.end();
+      return;
+    }
+    logger.error({ err: err.message }, 'Branch stream error');
+    try {
+      sendEvent('error', { message: 'Failed to create branch' });
+      sendEvent('done', {});
+    } catch { /* response closed */ }
+    res.end();
+  }
+});
+
+// GET /usage — daily usage stats
+router.get('/usage', (req, res) => {
+  const userId = req.user!.id;
+  const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
+  const stats = db.prepare(`
+    SELECT date, total_prompt_tokens, total_completion_tokens, total_messages
+    FROM usage_stats
+    WHERE user_id = ? AND date >= date('now', ?)
+    ORDER BY date ASC
+  `).all(userId, `-${days} days`);
+  res.json({ stats });
+});
 
 // POST /:id/documents — upload file
 router.post('/:id/documents', upload.single('file'), async (req, res) => {

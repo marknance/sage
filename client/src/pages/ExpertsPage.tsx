@@ -1,17 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useExpertStore } from '../stores/expertStore';
+import { useConversationStore } from '../stores/conversationStore';
+import { useConfirmStore } from '../stores/confirmStore';
 import ImportExpertModal from '../components/ImportExpertModal';
 import { SkeletonGrid } from '../components/Skeleton';
 
 export default function ExpertsPage() {
-  const { experts, total, limit, offset, isLoading, fetchExperts, fetchAllCategories, allCategories } = useExpertStore();
+  const { experts, total, limit, offset, isLoading, fetchExperts, fetchAllCategories, allCategories, deleteExpert, exportExpert } = useExpertStore();
+  const { createConversation, assignExpert } = useConversationStore();
+  const confirm = useConfirmStore((s) => s.confirm);
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [sort, setSort] = useState('recent');
   const [showImport, setShowImport] = useState(false);
   const [page, setPage] = useState(0);
+  const [menuOpen, setMenuOpen] = useState<number | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setPage(0);
@@ -92,12 +98,63 @@ export default function ExpertsPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {experts.map((expert) => (
-              <Link
+              <div
                 key={expert.id}
-                to={`/experts/${expert.id}`}
-                className="bg-surface rounded-xl border border-border p-5 hover:border-primary/50 transition-colors"
+                className="bg-surface rounded-xl border border-border p-5 hover:border-primary/50 transition-colors relative"
               >
-                <h3 className="text-lg font-medium text-text-primary mb-1">{expert.name}</h3>
+                {/* Quick actions menu */}
+                <div className="absolute top-3 right-3 z-10" ref={menuOpen === expert.id ? menuRef : undefined}>
+                  <button
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpen(menuOpen === expert.id ? null : expert.id); }}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg text-text-muted hover:text-text-primary hover:bg-background transition-colors text-lg"
+                  >
+                    &middot;&middot;&middot;
+                  </button>
+                  {menuOpen === expert.id && (
+                    <div className="absolute right-0 mt-1 w-40 bg-surface border border-border rounded-lg shadow-lg py-1 z-20">
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          setMenuOpen(null);
+                          const conv = await createConversation(undefined, 'standard');
+                          await assignExpert(conv.id, expert.id);
+                          navigate(`/conversations/${conv.id}`);
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm text-text-primary hover:bg-background transition-colors"
+                      >
+                        Start Conversation
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setMenuOpen(null); navigate(`/experts/${expert.id}`); }}
+                        className="w-full text-left px-3 py-2 text-sm text-text-primary hover:bg-background transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setMenuOpen(null); exportExpert(expert.id); }}
+                        className="w-full text-left px-3 py-2 text-sm text-text-primary hover:bg-background transition-colors"
+                      >
+                        Export
+                      </button>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          setMenuOpen(null);
+                          const ok = await confirm({ title: 'Delete Expert', message: `Delete "${expert.name}"? This cannot be undone.` });
+                          if (ok) {
+                            await deleteExpert(expert.id);
+                            fetchExperts({ search: search || undefined, category: category || undefined, sort, offset: page * 24 });
+                          }
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-background transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <Link to={`/experts/${expert.id}`} className="block">
+                <h3 className="text-lg font-medium text-text-primary mb-1 pr-8">{expert.name}</h3>
                 <p className="text-sm text-primary mb-2">{expert.domain}</p>
                 {expert.description && (
                   <p className="text-sm text-text-muted mb-3 line-clamp-2">{expert.description}</p>
@@ -129,7 +186,8 @@ export default function ExpertsPage() {
                     })}
                   </div>
                 )}
-              </Link>
+                </Link>
+              </div>
             ))}
           </div>
         )}

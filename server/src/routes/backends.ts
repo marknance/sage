@@ -3,6 +3,7 @@ import axios from 'axios';
 import { db } from '../index.js';
 import { authenticate } from '../middleware/auth.js';
 import { isValidUrl, isWithinLength } from '../lib/validate.js';
+import { encrypt, decrypt } from '../services/encryption.js';
 
 const router = Router();
 router.use(authenticate);
@@ -47,10 +48,11 @@ router.post('/', (req, res) => {
     return;
   }
 
+  const encryptedKey = encrypt(api_key || null);
   const result = db.prepare(`
     INSERT INTO ai_backends (user_id, name, type, base_url, api_key, org_id, is_active)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(userId, name, type, resolvedUrl, api_key || null, org_id || null, is_active ?? 1);
+  `).run(userId, name, type, resolvedUrl, encryptedKey, org_id || null, is_active ?? 1);
 
   const backend = db.prepare('SELECT * FROM ai_backends WHERE id = ?').get(result.lastInsertRowid) as any;
   res.status(201).json({ backend: maskBackend(backend) });
@@ -94,7 +96,7 @@ router.put('/:id', (req, res) => {
   // api_key logic: omitted = keep, empty string = clear, value = update
   let resolvedApiKey = existing.api_key;
   if (api_key !== undefined) {
-    resolvedApiKey = api_key === '' ? null : api_key;
+    resolvedApiKey = api_key === '' ? null : encrypt(api_key);
   }
 
   db.prepare(`
@@ -159,8 +161,9 @@ router.post('/:id/test', async (req, res) => {
 
   try {
     const headers: Record<string, string> = {};
-    if (backend.api_key) {
-      headers['Authorization'] = `Bearer ${backend.api_key}`;
+    const decryptedKey = decrypt(backend.api_key);
+    if (decryptedKey) {
+      headers['Authorization'] = `Bearer ${decryptedKey}`;
     }
     if (backend.org_id) {
       headers['OpenAI-Organization'] = backend.org_id;
@@ -189,8 +192,9 @@ router.get('/:id/models', async (req, res) => {
 
   try {
     const headers: Record<string, string> = {};
-    if (backend.api_key) {
-      headers['Authorization'] = `Bearer ${backend.api_key}`;
+    const decryptedKey = decrypt(backend.api_key);
+    if (decryptedKey) {
+      headers['Authorization'] = `Bearer ${decryptedKey}`;
     }
     if (backend.org_id) {
       headers['OpenAI-Organization'] = backend.org_id;
