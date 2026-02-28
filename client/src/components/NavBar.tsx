@@ -8,7 +8,6 @@ const NAV_ITEMS = [
   { to: '/experts', label: 'Experts' },
   { to: '/categories', label: 'Categories' },
   { to: '/backends', label: 'Backends' },
-  { to: '/profile', label: 'Profile' },
 ];
 
 export default function NavBar() {
@@ -66,10 +65,7 @@ export default function NavBar() {
     return () => clearInterval(id);
   }, []);
 
-  const allItems = [
-    ...NAV_ITEMS,
-    ...(user?.role === 'admin' ? [{ to: '/admin', label: 'Admin' }] : []),
-  ];
+  const allItems = NAV_ITEMS;
 
   return (
     <nav className="bg-surface border-b border-border shrink-0 relative">
@@ -122,6 +118,20 @@ export default function NavBar() {
               {navigator.platform?.includes('Mac') ? '\u2318' : 'Ctrl'}K
             </kbd>
           </button>
+          <Link
+            to="/settings"
+            className={`px-2 py-1.5 rounded-lg transition-colors ${
+              location.pathname.startsWith('/settings')
+                ? 'text-primary bg-primary/10'
+                : 'text-text-secondary hover:text-text-primary hover:bg-background'
+            }`}
+            title="Settings"
+          >
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
+              <path d="M16.18 12.32a1.25 1.25 0 00.25 1.38l.05.04a1.52 1.52 0 01-1.07 2.59 1.52 1.52 0 01-1.08-.44l-.04-.05a1.25 1.25 0 00-1.38-.25 1.25 1.25 0 00-.76 1.15v.14a1.52 1.52 0 01-3.03 0v-.07a1.25 1.25 0 00-.82-1.15 1.25 1.25 0 00-1.38.25l-.04.05a1.52 1.52 0 01-2.15-2.15l.05-.04a1.25 1.25 0 00.25-1.38 1.25 1.25 0 00-1.15-.76h-.14a1.52 1.52 0 010-3.03h.07a1.25 1.25 0 001.15-.82 1.25 1.25 0 00-.25-1.38l-.05-.04a1.52 1.52 0 012.15-2.15l.04.05a1.25 1.25 0 001.38.25h.06a1.25 1.25 0 00.76-1.15v-.14a1.52 1.52 0 013.03 0v.07a1.25 1.25 0 00.76 1.15 1.25 1.25 0 001.38-.25l.04-.05a1.52 1.52 0 012.15 2.15l-.05.04a1.25 1.25 0 00-.25 1.38v.06a1.25 1.25 0 001.15.76h.14a1.52 1.52 0 010 3.03h-.07a1.25 1.25 0 00-1.15.76z" />
+            </svg>
+          </Link>
           <button
             onClick={toggle}
             className="px-2 py-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-background transition-colors text-sm"
