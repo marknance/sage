@@ -3,6 +3,8 @@ import { useNavigate, Link } from 'react-router';
 import { useExpertStore } from '../stores/expertStore';
 import { useBackendStore } from '../stores/backendStore';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useToastStore } from '../stores/toastStore';
+import { api } from '../lib/api';
 
 const TONE_OPTIONS = ['formal', 'casual', 'technical', 'friendly', 'concise'];
 
@@ -34,12 +36,93 @@ export default function ExpertCreatePage() {
   );
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [assisting, setAssisting] = useState(false);
+  const addToast = useToastStore((s) => s.addToast);
   const isDirty = !!(name || domain || description || system_prompt || model_override);
   const blocker = useUnsavedChanges(isDirty);
 
   useEffect(() => {
     fetchBackends();
   }, [fetchBackends]);
+
+  interface GenerateResponse {
+    name: string;
+    description: string;
+    system_prompt: string;
+    tone: string;
+    behaviors: Record<string, boolean>;
+  }
+
+  async function handleGenerate() {
+    if (!domain.trim()) {
+      addToast('warning', 'Enter a domain first so AI knows what to generate.');
+      return;
+    }
+    setGenerating(true);
+    try {
+      const data = await api<GenerateResponse>('/api/experts/generate', {
+        method: 'POST',
+        body: JSON.stringify({ mode: 'full', domain: domain.trim(), tone: personality_tone }),
+      });
+      setName(data.name);
+      setDescription(data.description);
+      setSystemPrompt(data.system_prompt);
+      if (data.tone && TONE_OPTIONS.includes(data.tone)) setTone(data.tone);
+      if (data.behaviors) {
+        setBehaviorState((prev) => {
+          const next = { ...prev };
+          for (const key of BEHAVIOR_KEYS) {
+            if (key in data.behaviors) next[key] = data.behaviors[key];
+          }
+          return next;
+        });
+      }
+      addToast('success', 'Expert generated! Review and edit the fields below.');
+    } catch (err: any) {
+      addToast('error', err.message || 'Failed to generate expert');
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function handleAssist() {
+    if (!domain.trim()) {
+      addToast('warning', 'Enter a domain first so AI knows what to assist with.');
+      return;
+    }
+    setAssisting(true);
+    try {
+      const data = await api<GenerateResponse>('/api/experts/generate', {
+        method: 'POST',
+        body: JSON.stringify({
+          mode: 'assist',
+          domain: domain.trim(),
+          name: name.trim() || undefined,
+          description: description.trim() || undefined,
+          tone: personality_tone,
+        }),
+      });
+      if (!name.trim() && data.name) setName(data.name);
+      if (data.description) setDescription(data.description);
+      if (data.system_prompt) setSystemPrompt(data.system_prompt);
+      if (data.tone && TONE_OPTIONS.includes(data.tone)) setTone(data.tone);
+      if (data.behaviors) {
+        setBehaviorState((prev) => {
+          const next = { ...prev };
+          for (const key of BEHAVIOR_KEYS) {
+            if (key in data.behaviors) next[key] = data.behaviors[key];
+          }
+          return next;
+        });
+      }
+      addToast('success', 'Fields refined by AI. Review the changes.');
+    } catch (err: any) {
+      addToast('error', err.message || 'Failed to assist');
+    } finally {
+      setAssisting(false);
+    }
+  }
 
   useEffect(() => {
     if (backend_id) {
@@ -109,7 +192,22 @@ export default function ExpertCreatePage() {
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* Basic Info */}
           <div className="bg-surface rounded-xl border border-border p-6">
-            <h2 className="text-lg font-medium text-text-primary mb-5">Basic Info</h2>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-medium text-text-primary">Basic Info</h2>
+              <button
+                type="button"
+                onClick={handleGenerate}
+                disabled={generating || assisting}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 disabled:opacity-50 transition-colors"
+              >
+                {generating ? (
+                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeLinecap="round" /></svg>
+                ) : (
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v5m4-1-4 4-4-4m0 8h8m-4 0v5" /><path d="M9 2l1.5 3L9 8l1.5-1.5L12 8l1.5-1.5L15 8l-1.5-3L15 2l-1.5 1.5L12 2l-1.5 1.5z" /></svg>
+                )}
+                {generating ? 'Generating...' : 'Generate with AI'}
+              </button>
+            </div>
             <div className="space-y-5">
               <div>
                 <label className="block text-sm text-text-secondary mb-1.5">Name *</label>
@@ -136,7 +234,22 @@ export default function ExpertCreatePage() {
                 {fieldErrors.domain && <p className="text-xs text-destructive mt-1">{fieldErrors.domain}</p>}
               </div>
               <div>
-                <label className="block text-sm text-text-secondary mb-1.5">Description</label>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <label className="text-sm text-text-secondary">Description</label>
+                  <button
+                    type="button"
+                    onClick={handleAssist}
+                    disabled={assisting || generating}
+                    title="AI Assist"
+                    className="text-primary hover:text-primary/80 disabled:opacity-50 transition-colors"
+                  >
+                    {assisting ? (
+                      <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeLinecap="round" /></svg>
+                    ) : (
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M10 2L12 6L10 10L12 8L14 10L12 6L14 2L12 4L10 2ZM2 10L4 14L2 18L4 16L6 18L4 14L6 10L4 12L2 10ZM16 10L18 14L16 18L18 16L20 18L18 14L20 10L18 12L16 10Z" /></svg>
+                    )}
+                  </button>
+                </div>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -167,7 +280,22 @@ export default function ExpertCreatePage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-text-secondary mb-1.5">System Prompt</label>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <label className="text-sm text-text-secondary">System Prompt</label>
+                  <button
+                    type="button"
+                    onClick={handleAssist}
+                    disabled={assisting || generating}
+                    title="AI Assist"
+                    className="text-primary hover:text-primary/80 disabled:opacity-50 transition-colors"
+                  >
+                    {assisting ? (
+                      <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeLinecap="round" /></svg>
+                    ) : (
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M10 2L12 6L10 10L12 8L14 10L12 6L14 2L12 4L10 2ZM2 10L4 14L2 18L4 16L6 18L4 14L6 10L4 12L2 10ZM16 10L18 14L16 18L18 16L20 18L18 14L20 10L18 12L16 10Z" /></svg>
+                    )}
+                  </button>
+                </div>
                 <textarea
                   value={system_prompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}

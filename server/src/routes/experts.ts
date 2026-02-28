@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db } from '../index.js';
 import { authenticate } from '../middleware/auth.js';
 import { isWithinLength } from '../lib/validate.js';
+import { resolveBackendConfig, chatCompletion } from '../services/ollama.js';
 
 const router = Router();
 router.use(authenticate);
@@ -51,6 +52,97 @@ router.get('/', (req, res) => {
 
   const experts = db.prepare(query).all(...params);
   res.json({ experts });
+});
+
+// POST /generate — AI-assisted expert generation
+router.post('/generate', async (req, res) => {
+  const userId = req.user!.id;
+  const { mode, domain, name, description, tone } = req.body as {
+    mode: 'assist' | 'full';
+    domain: string;
+    name?: string;
+    description?: string;
+    tone?: string;
+  };
+
+  if (!domain || !domain.trim()) {
+    res.status(400).json({ error: 'Domain is required' });
+    return;
+  }
+
+  if (mode !== 'assist' && mode !== 'full') {
+    res.status(400).json({ error: 'Mode must be "assist" or "full"' });
+    return;
+  }
+
+  // Get user's default backend
+  const userSettings = db.prepare('SELECT default_backend_id, default_model FROM settings WHERE user_id = ?')
+    .get(userId) as { default_backend_id: number | null; default_model: string | null } | undefined;
+
+  const backend = resolveBackendConfig(null, userSettings?.default_backend_id, db);
+  if (!backend) {
+    res.status(400).json({ error: 'No AI backend configured. Please set a default backend in Settings.' });
+    return;
+  }
+
+  const model = userSettings?.default_model || undefined;
+
+  const behaviorList = DEFAULT_BEHAVIORS.map((b) => `"${b}"`).join(', ');
+
+  let userPrompt: string;
+  if (mode === 'full') {
+    userPrompt = `Generate a complete expert configuration for the domain: "${domain.trim()}"${tone ? `. Preferred tone: ${tone}` : ''}.`;
+  } else {
+    const parts = [`Refine/complete an expert configuration for the domain: "${domain.trim()}".`];
+    if (name) parts.push(`Current name: "${name}"`);
+    if (description) parts.push(`Current description: "${description}"`);
+    if (tone) parts.push(`Current tone: "${tone}"`);
+    parts.push('Fill in or improve any missing/weak fields.');
+    userPrompt = parts.join(' ');
+  }
+
+  const systemPrompt = `You are an expert configuration generator. Given a domain or topic, generate a JSON object for an AI expert assistant.
+
+Return ONLY valid JSON with these fields:
+- "name": string (short, descriptive name for the expert, e.g. "Python Mentor")
+- "description": string (1-2 sentence description of what this expert does)
+- "system_prompt": string (detailed instructions for how the expert should behave, its expertise areas, and how it should respond — 2-4 paragraphs)
+- "tone": one of "formal", "casual", "technical", "friendly", "concise"
+- "behaviors": object with boolean values for these keys: ${behaviorList}
+
+Make the system_prompt detailed and specific to the domain. It should define the expert's personality, knowledge areas, and response style.
+
+Return ONLY the JSON object, no markdown fences or extra text.`;
+
+  try {
+    const raw = await chatCompletion({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.7,
+      backend,
+    });
+
+    // Strip markdown fences if present
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const parsed = JSON.parse(cleaned);
+
+    res.json({
+      name: parsed.name || '',
+      description: parsed.description || '',
+      system_prompt: parsed.system_prompt || '',
+      tone: parsed.tone || 'formal',
+      behaviors: parsed.behaviors || {},
+    });
+  } catch (err: any) {
+    if (err instanceof SyntaxError) {
+      res.status(502).json({ error: 'AI returned invalid JSON. Please try again.' });
+      return;
+    }
+    res.status(502).json({ error: err.message || 'Failed to generate expert configuration' });
+  }
 });
 
 // POST / — create expert
