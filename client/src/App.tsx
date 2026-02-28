@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
 import ProtectedRoute from './components/ProtectedRoute';
+import ErrorBoundary from './components/ErrorBoundary';
 import ToastContainer from './components/Toast';
 import ConfirmModal from './components/ConfirmModal';
 import LoginPage from './pages/LoginPage';
@@ -30,6 +31,7 @@ function App() {
       <ToastContainer />
       <ConfirmModal />
       <BrowserRouter>
+        <ErrorBoundary>
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
@@ -56,6 +58,7 @@ function App() {
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </ErrorBoundary>
       </BrowserRouter>
     </QueryClientProvider>
   );

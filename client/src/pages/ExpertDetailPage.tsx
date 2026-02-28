@@ -3,6 +3,8 @@ import { useParams, useNavigate, Link } from 'react-router';
 import { useExpertStore, type Behavior } from '../stores/expertStore';
 import { useBackendStore } from '../stores/backendStore';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useToastStore } from '../stores/toastStore';
+import { api } from '../lib/api';
 
 const TONE_OPTIONS = ['formal', 'casual', 'technical', 'friendly', 'concise'];
 
@@ -39,6 +41,7 @@ export default function ExpertDetailPage() {
     checkExpertUsage,
     exportExpert,
     cloneExpert,
+    createCategory,
   } = useExpertStore();
   const { backends, fetchBackends, models, fetchModels } = useBackendStore();
 
@@ -59,6 +62,17 @@ export default function ExpertDetailPage() {
   const [memoryContent, setMemoryContent] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [addCategoryId, setAddCategoryId] = useState('');
+  const [assisting, setAssisting] = useState(false);
+  const [suggestingCategories, setSuggestingCategories] = useState(false);
+  const [suggestedCategories, setSuggestedCategories] = useState<string[]>([]);
+  const [usage, setUsage] = useState<{
+    conversation_count: number;
+    message_count: number;
+    first_used_at: string | null;
+    last_used_at: string | null;
+    recent_conversations: { id: number; title: string; message_count: number; last_message_at: string }[];
+  } | null>(null);
+  const addToast = useToastStore((s) => s.addToast);
 
   const originalForm = useRef(editForm);
   const isDirty = editing && JSON.stringify(editForm) !== JSON.stringify(originalForm.current);
@@ -71,6 +85,7 @@ export default function ExpertDetailPage() {
       fetchMemories(expertId);
       fetchAllCategories();
       fetchBackends();
+      api<any>(`/api/experts/${expertId}/usage`).then(setUsage).catch(() => {});
     }
   }, [id, expertId, fetchExpert, fetchMemories, fetchAllCategories, fetchBackends]);
 
@@ -139,6 +154,72 @@ export default function ExpertDetailPage() {
     const newIds = [...categories.map((c) => c.id), Number(addCategoryId)];
     await updateCategories(expertId, newIds);
     setAddCategoryId('');
+  }
+
+  interface GenerateResponse {
+    name: string;
+    description: string;
+    system_prompt: string;
+    tone: string;
+    behaviors: Record<string, boolean>;
+  }
+
+  async function handleAssist() {
+    if (!editForm.domain.trim()) {
+      addToast('warning', 'Domain is required for AI assist.');
+      return;
+    }
+    setAssisting(true);
+    try {
+      const data = await api<GenerateResponse>('/api/experts/generate', {
+        method: 'POST',
+        body: JSON.stringify({
+          mode: 'assist',
+          domain: editForm.domain.trim(),
+          name: editForm.name.trim() || undefined,
+          description: editForm.description.trim() || undefined,
+          tone: editForm.personality_tone,
+        }),
+      });
+      if (data.description) setEditForm((f) => ({ ...f, description: data.description }));
+      if (data.system_prompt) setEditForm((f) => ({ ...f, system_prompt: data.system_prompt }));
+      if (data.tone && TONE_OPTIONS.includes(data.tone)) setEditForm((f) => ({ ...f, personality_tone: data.tone }));
+      addToast('success', 'Fields refined by AI. Review the changes.');
+    } catch (err: any) {
+      addToast('error', err.message || 'Failed to assist');
+    } finally {
+      setAssisting(false);
+    }
+  }
+
+  async function handleSuggestCategories() {
+    setSuggestingCategories(true);
+    setSuggestedCategories([]);
+    try {
+      const data = await api<{ suggestions: string[] }>(`/api/experts/${expertId}/suggest-categories`, {
+        method: 'POST',
+      });
+      setSuggestedCategories(data.suggestions);
+    } catch (err: any) {
+      addToast('error', err.message || 'Failed to suggest categories');
+    } finally {
+      setSuggestingCategories(false);
+    }
+  }
+
+  async function handleApplySuggestedCategory(catName: string) {
+    try {
+      let existing = allCategories.find((c) => c.name.toLowerCase() === catName.toLowerCase());
+      if (!existing) {
+        existing = await createCategory(catName);
+      }
+      if (!categories.some((c) => c.id === existing!.id)) {
+        await updateCategories(expertId, [...categories.map((c) => c.id), existing.id]);
+      }
+      setSuggestedCategories((prev) => prev.filter((s) => s !== catName));
+    } catch (err: any) {
+      addToast('error', err.message || 'Failed to apply category');
+    }
   }
 
   async function handleAddMemory(e: FormEvent) {
@@ -279,7 +360,22 @@ export default function ExpertDetailPage() {
                 {fieldErrors.domain && <p className="text-xs text-destructive mt-1">{fieldErrors.domain}</p>}
               </div>
               <div>
-                <label className="block text-sm text-text-secondary mb-1.5">Description</label>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <label className="text-sm text-text-secondary">Description</label>
+                  <button
+                    type="button"
+                    onClick={handleAssist}
+                    disabled={assisting}
+                    title="AI Assist"
+                    className="text-primary hover:text-primary/80 disabled:opacity-50 transition-colors"
+                  >
+                    {assisting ? (
+                      <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeLinecap="round" /></svg>
+                    ) : (
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M10 2L12 6L10 10L12 8L14 10L12 6L14 2L12 4L10 2ZM2 10L4 14L2 18L4 16L6 18L4 14L6 10L4 12L2 10ZM16 10L18 14L16 18L18 16L20 18L18 14L20 10L18 12L16 10Z" /></svg>
+                    )}
+                  </button>
+                </div>
                 <textarea
                   value={editForm.description}
                   onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
@@ -302,7 +398,22 @@ export default function ExpertDetailPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-text-secondary mb-1.5">System Prompt</label>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <label className="text-sm text-text-secondary">System Prompt</label>
+                  <button
+                    type="button"
+                    onClick={handleAssist}
+                    disabled={assisting}
+                    title="AI Assist"
+                    className="text-primary hover:text-primary/80 disabled:opacity-50 transition-colors"
+                  >
+                    {assisting ? (
+                      <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeLinecap="round" /></svg>
+                    ) : (
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M10 2L12 6L10 10L12 8L14 10L12 6L14 2L12 4L10 2ZM2 10L4 14L2 18L4 16L6 18L4 14L6 10L4 12L2 10ZM16 10L18 14L16 18L18 16L20 18L18 14L20 10L18 12L16 10Z" /></svg>
+                    )}
+                  </button>
+                </div>
                 <textarea
                   value={editForm.system_prompt}
                   onChange={(e) => setEditForm((f) => ({ ...f, system_prompt: e.target.value }))}
@@ -444,6 +555,52 @@ export default function ExpertDetailPage() {
           </div>
         </div>
 
+        {/* Usage Card */}
+        {usage && usage.conversation_count > 0 && (
+          <div className="bg-surface rounded-xl border border-border p-6">
+            <h2 className="text-lg font-medium text-text-primary mb-4">Usage</h2>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <p className="text-sm text-text-muted">Conversations</p>
+                <p className="text-lg font-semibold text-text-primary">{usage.conversation_count}</p>
+              </div>
+              <div>
+                <p className="text-sm text-text-muted">Messages</p>
+                <p className="text-lg font-semibold text-text-primary">{usage.message_count}</p>
+              </div>
+              {usage.first_used_at && (
+                <div>
+                  <p className="text-sm text-text-muted">First Used</p>
+                  <p className="text-sm text-text-primary">{new Date(usage.first_used_at).toLocaleDateString()}</p>
+                </div>
+              )}
+              {usage.last_used_at && (
+                <div>
+                  <p className="text-sm text-text-muted">Last Used</p>
+                  <p className="text-sm text-text-primary">{new Date(usage.last_used_at).toLocaleDateString()}</p>
+                </div>
+              )}
+            </div>
+            {usage.recent_conversations.length > 0 && (
+              <div>
+                <p className="text-sm text-text-muted mb-2">Recent Conversations</p>
+                <div className="space-y-1">
+                  {usage.recent_conversations.map((c) => (
+                    <Link
+                      key={c.id}
+                      to={`/conversations/${c.id}`}
+                      className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-background transition-colors"
+                    >
+                      <span className="text-sm text-text-primary truncate">{c.title || 'Untitled'}</span>
+                      <span className="text-xs text-text-muted flex-shrink-0 ml-2">{c.message_count} msgs</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Categories Card */}
         <div className="bg-surface rounded-xl border border-border p-6">
           <h2 className="text-lg font-medium text-text-primary mb-5">Categories</h2>
@@ -490,6 +647,33 @@ export default function ExpertDetailPage() {
               </button>
             </div>
           )}
+          <div className="mt-3">
+            <button
+              onClick={handleSuggestCategories}
+              disabled={suggestingCategories}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 disabled:opacity-50 transition-colors"
+            >
+              {suggestingCategories ? (
+                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeLinecap="round" /></svg>
+              ) : (
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M10 2L12 6L10 10L12 8L14 10L12 6L14 2L12 4L10 2ZM2 10L4 14L2 18L4 16L6 18L4 14L6 10L4 12L2 10ZM16 10L18 14L16 18L18 16L20 18L18 14L20 10L18 12L16 10Z" /></svg>
+              )}
+              {suggestingCategories ? 'Suggesting...' : 'Suggest Categories'}
+            </button>
+            {suggestedCategories.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {suggestedCategories.map((name) => (
+                  <button
+                    key={name}
+                    onClick={() => handleApplySuggestedCategory(name)}
+                    className="px-3 py-1 rounded-full border border-primary/30 text-primary text-sm hover:bg-primary/10 transition-colors"
+                  >
+                    + {name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Memories Card */}

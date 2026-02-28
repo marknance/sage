@@ -37,6 +37,18 @@ export default function NavBar() {
         input?.select();
       }, 100);
     }
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'E') {
+      e.preventDefault();
+      navigate('/experts');
+    }
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'N') {
+      e.preventDefault();
+      navigate('/experts/new');
+    }
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'C') {
+      e.preventDefault();
+      navigate('/conversations');
+    }
     if (e.key === 'Escape') {
       const modal = document.querySelector('.fixed.inset-0.z-50');
       if (modal) {

@@ -145,6 +145,77 @@ Return ONLY the JSON object, no markdown fences or extra text.`;
   }
 });
 
+// GET /templates — pre-built expert templates
+router.get('/templates', (_req, res) => {
+  const templates = [
+    {
+      name: 'Code Reviewer',
+      domain: 'Software Engineering',
+      description: 'Reviews code for bugs, best practices, and maintainability.',
+      system_prompt: 'You are an experienced code reviewer. Analyze code for bugs, security vulnerabilities, performance issues, and adherence to best practices. Provide specific, actionable feedback with explanations. Suggest improvements with code examples when possible. Be thorough but constructive.',
+      tone: 'technical',
+      behaviors: { cite_sources: false, ask_clarifying_questions: true, provide_examples: true, use_analogies: false, summarize_responses: true },
+    },
+    {
+      name: 'Writing Coach',
+      domain: 'Writing & Communication',
+      description: 'Helps improve writing clarity, style, and structure.',
+      system_prompt: 'You are a skilled writing coach. Help users improve their writing by focusing on clarity, conciseness, tone, and structure. Offer specific suggestions rather than vague feedback. When editing, explain why changes improve the text. Adapt your advice to the intended audience and purpose of the writing.',
+      tone: 'friendly',
+      behaviors: { cite_sources: false, ask_clarifying_questions: true, provide_examples: true, use_analogies: true, summarize_responses: false },
+    },
+    {
+      name: 'Data Analyst',
+      domain: 'Data Analysis & Statistics',
+      description: 'Analyzes data, explains statistical concepts, and helps with visualization.',
+      system_prompt: 'You are a data analyst with expertise in statistics, data visualization, and data-driven decision making. Help users understand their data, choose appropriate analysis methods, and interpret results. Explain statistical concepts clearly and suggest visualization approaches. Be precise with numbers and transparent about limitations.',
+      tone: 'technical',
+      behaviors: { cite_sources: true, ask_clarifying_questions: true, provide_examples: true, use_analogies: true, summarize_responses: true },
+    },
+    {
+      name: 'Research Assistant',
+      domain: 'Research & Analysis',
+      description: 'Assists with research tasks, literature review, and synthesis.',
+      system_prompt: 'You are a thorough research assistant. Help users explore topics, synthesize information, and develop well-supported arguments. Always distinguish between established facts and emerging ideas. Provide balanced perspectives and cite relevant sources when possible. Help organize findings into clear, structured summaries.',
+      tone: 'formal',
+      behaviors: { cite_sources: true, ask_clarifying_questions: true, provide_examples: true, use_analogies: false, summarize_responses: true },
+    },
+    {
+      name: 'Language Tutor',
+      domain: 'Language Learning',
+      description: 'Teaches languages through conversation, grammar, and vocabulary practice.',
+      system_prompt: 'You are a patient and encouraging language tutor. Help users learn through a mix of explanation, examples, and practice exercises. Correct mistakes gently and explain the rules behind corrections. Use the target language progressively more as the user advances. Incorporate cultural context when relevant.',
+      tone: 'friendly',
+      behaviors: { cite_sources: false, ask_clarifying_questions: true, provide_examples: true, use_analogies: true, summarize_responses: false },
+    },
+    {
+      name: 'Math Tutor',
+      domain: 'Mathematics',
+      description: 'Explains math concepts and guides through problem solving step by step.',
+      system_prompt: 'You are a patient math tutor. Break down complex problems into manageable steps. Explain the reasoning behind each step rather than just showing the answer. Use visual representations and real-world analogies when helpful. Encourage students to attempt problems themselves and guide them when stuck.',
+      tone: 'friendly',
+      behaviors: { cite_sources: false, ask_clarifying_questions: true, provide_examples: true, use_analogies: true, summarize_responses: true },
+    },
+    {
+      name: 'DevOps Engineer',
+      domain: 'DevOps & Infrastructure',
+      description: 'Assists with CI/CD, containers, cloud infrastructure, and automation.',
+      system_prompt: 'You are a senior DevOps engineer with expertise in CI/CD pipelines, containerization, cloud platforms (AWS, GCP, Azure), and infrastructure as code. Help users design reliable, scalable infrastructure. Prioritize security and cost optimization. Provide practical configurations and scripts with clear explanations.',
+      tone: 'technical',
+      behaviors: { cite_sources: true, ask_clarifying_questions: true, provide_examples: true, use_analogies: false, summarize_responses: true },
+    },
+    {
+      name: 'Creative Writer',
+      domain: 'Creative Writing & Storytelling',
+      description: 'Helps craft stories, dialogues, and creative content.',
+      system_prompt: 'You are a creative writing partner. Help users develop compelling narratives, vivid characters, and engaging dialogue. Offer techniques for overcoming writer\'s block and improving craft. When asked to write, create original content that matches the requested style and tone. Provide constructive feedback that encourages experimentation.',
+      tone: 'casual',
+      behaviors: { cite_sources: false, ask_clarifying_questions: true, provide_examples: true, use_analogies: true, summarize_responses: false },
+    },
+  ];
+  res.json({ templates });
+});
+
 // POST / — create expert
 router.post('/', (req, res) => {
   const userId = req.user!.id;
@@ -293,6 +364,64 @@ router.post('/:id/clone', (req, res) => {
   res.status(201).json({ expert: cloned });
 });
 
+// POST /:id/suggest-categories — AI-suggested categories
+router.post('/:id/suggest-categories', async (req, res) => {
+  const expert = db.prepare('SELECT * FROM experts WHERE id = ? AND user_id = ?')
+    .get(req.params.id, req.user!.id) as any;
+  if (!expert) {
+    res.status(404).json({ error: 'Expert not found' });
+    return;
+  }
+
+  const userSettings = db.prepare('SELECT default_backend_id, default_model FROM settings WHERE user_id = ?')
+    .get(req.user!.id) as { default_backend_id: number | null; default_model: string | null } | undefined;
+
+  const backend = resolveBackendConfig(null, userSettings?.default_backend_id, db);
+  if (!backend) {
+    res.status(400).json({ error: 'No AI backend configured. Please set a default backend in Settings.' });
+    return;
+  }
+
+  const model = userSettings?.default_model || undefined;
+
+  const existingCats = db.prepare(
+    'SELECT name FROM expert_categories WHERE user_id = ?'
+  ).all(req.user!.id) as { name: string }[];
+  const existingNames = existingCats.map((c) => c.name);
+
+  const prompt = `Given an AI expert with:
+- Name: "${expert.name}"
+- Domain: "${expert.domain}"
+- Description: "${expert.description || 'N/A'}"
+
+And the user's existing categories: ${existingNames.length > 0 ? existingNames.join(', ') : '(none yet)'}
+
+Suggest 3-5 short category names that would be good fits for organizing this expert. Prefer reusing existing categories when they fit. Return ONLY a JSON array of strings, no extra text.`;
+
+  try {
+    const raw = await chatCompletion({
+      model,
+      messages: [
+        { role: 'system', content: 'You suggest category labels for organizing AI experts. Return only a JSON array of short category name strings.' },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.5,
+      backend,
+    });
+
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const suggestions = JSON.parse(cleaned);
+    if (!Array.isArray(suggestions)) throw new SyntaxError('Expected array');
+    res.json({ suggestions: suggestions.map(String).slice(0, 5) });
+  } catch (err: any) {
+    if (err instanceof SyntaxError) {
+      res.status(502).json({ error: 'AI returned invalid JSON. Please try again.' });
+      return;
+    }
+    res.status(502).json({ error: err.message || 'Failed to suggest categories' });
+  }
+});
+
 // GET /:id/usage — check expert usage across conversations
 router.get('/:id/usage', (req, res) => {
   const existing = db.prepare('SELECT id FROM experts WHERE id = ? AND user_id = ?').get(req.params.id, req.user!.id);
@@ -308,7 +437,31 @@ router.get('/:id/usage', (req, res) => {
     'SELECT COUNT(*) as count FROM messages WHERE expert_id = ?'
   ).get(req.params.id) as { count: number };
 
-  res.json({ conversation_count: conversationCount.count, message_count: messageCount.count });
+  const firstUsed = db.prepare(
+    'SELECT MIN(m.created_at) as first_used_at FROM messages m WHERE m.expert_id = ?'
+  ).get(req.params.id) as { first_used_at: string | null };
+  const lastUsed = db.prepare(
+    'SELECT MAX(m.created_at) as last_used_at FROM messages m WHERE m.expert_id = ?'
+  ).get(req.params.id) as { last_used_at: string | null };
+
+  const recentConversations = db.prepare(`
+    SELECT c.id, c.title,
+      (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id) as message_count,
+      (SELECT MAX(created_at) FROM messages WHERE conversation_id = c.id) as last_message_at
+    FROM conversations c
+    JOIN conversation_experts ce ON ce.conversation_id = c.id
+    WHERE ce.expert_id = ?
+    ORDER BY last_message_at DESC
+    LIMIT 5
+  `).all(req.params.id) as { id: number; title: string; message_count: number; last_message_at: string }[];
+
+  res.json({
+    conversation_count: conversationCount.count,
+    message_count: messageCount.count,
+    first_used_at: firstUsed.first_used_at,
+    last_used_at: lastUsed.last_used_at,
+    recent_conversations: recentConversations,
+  });
 });
 
 // DELETE /:id — delete expert

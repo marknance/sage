@@ -38,12 +38,15 @@ export default function ExpertCreatePage() {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [assisting, setAssisting] = useState(false);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const addToast = useToastStore((s) => s.addToast);
   const isDirty = !!(name || domain || description || system_prompt || model_override);
   const blocker = useUnsavedChanges(isDirty);
 
   useEffect(() => {
     fetchBackends();
+    api<{ templates: any[] }>('/api/experts/templates').then((d) => setTemplates(d.templates)).catch(() => {});
   }, [fetchBackends]);
 
   interface GenerateResponse {
@@ -124,6 +127,25 @@ export default function ExpertCreatePage() {
     }
   }
 
+  function applyTemplate(t: any) {
+    setName(t.name);
+    setDomain(t.domain);
+    setDescription(t.description);
+    setSystemPrompt(t.system_prompt);
+    if (t.tone && TONE_OPTIONS.includes(t.tone)) setTone(t.tone);
+    if (t.behaviors) {
+      setBehaviorState((prev) => {
+        const next = { ...prev };
+        for (const key of BEHAVIOR_KEYS) {
+          if (key in t.behaviors) next[key] = t.behaviors[key];
+        }
+        return next;
+      });
+    }
+    setTemplatesOpen(false);
+    addToast('success', `Template "${t.name}" applied. Edit fields as needed.`);
+  }
+
   useEffect(() => {
     if (backend_id) {
       fetchModels(Number(backend_id));
@@ -184,6 +206,35 @@ export default function ExpertCreatePage() {
           </Link>
           <h1 className="text-2xl font-semibold text-text-primary">New Expert</h1>
         </div>
+
+        {templates.length > 0 && (
+          <div className="mb-6">
+            <button
+              type="button"
+              onClick={() => setTemplatesOpen((v) => !v)}
+              className="flex items-center gap-2 text-sm font-medium text-text-secondary hover:text-text-primary transition-colors"
+            >
+              <svg className={`w-4 h-4 transition-transform ${templatesOpen ? 'rotate-90' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" /></svg>
+              Start from Template
+            </button>
+            {templatesOpen && (
+              <div className="mt-3 flex gap-3 overflow-x-auto pb-2">
+                {templates.map((t) => (
+                  <button
+                    key={t.name}
+                    type="button"
+                    onClick={() => applyTemplate(t)}
+                    className="flex-shrink-0 w-48 p-3 rounded-xl border border-border bg-surface hover:border-primary/50 hover:bg-primary/5 transition-colors text-left"
+                  >
+                    <p className="text-sm font-medium text-text-primary truncate">{t.name}</p>
+                    <p className="text-xs text-text-muted mt-1">{t.domain}</p>
+                    <p className="text-xs text-text-secondary mt-1 line-clamp-2">{t.description}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {error && (
           <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>
