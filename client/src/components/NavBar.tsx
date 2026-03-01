@@ -147,9 +147,14 @@ export default function NavBar() {
           <button
             onClick={toggle}
             className="px-2 py-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-background transition-colors text-sm"
-            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={theme === 'dark' ? 'Switch to light mode' : theme === 'light' ? 'Switch to Thunder Light' : 'Switch to dark mode'}
           >
-            {theme === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19'}
+            {theme === 'dark' ? '\u2600\uFE0F' : theme === 'light' ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 16.9A5 5 0 0 0 18 7h-1.26a8 8 0 1 0-11.62 9" />
+                <polyline points="13 11 9 17 15 17 11 23" />
+              </svg>
+            ) : '\uD83C\uDF19'}
           </button>
 
           {/* Mobile hamburger */}

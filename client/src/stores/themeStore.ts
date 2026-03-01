@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import { api } from '../lib/api';
 
-type Theme = 'dark' | 'light';
+type Theme = 'dark' | 'light' | 'thunder-light';
+
+const THEME_ORDER: Theme[] = ['dark', 'light', 'thunder-light'];
 
 interface ThemeState {
   theme: Theme;
@@ -10,10 +12,9 @@ interface ThemeState {
 }
 
 function applyTheme(theme: Theme) {
-  if (theme === 'light') {
-    document.documentElement.classList.add('light');
-  } else {
-    document.documentElement.classList.remove('light');
+  document.documentElement.classList.remove('light', 'thunder-light');
+  if (theme !== 'dark') {
+    document.documentElement.classList.add(theme);
   }
 }
 
@@ -38,7 +39,9 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   },
 
   toggle: () => {
-    const next = get().theme === 'dark' ? 'light' : 'dark';
+    const current = get().theme;
+    const idx = THEME_ORDER.indexOf(current);
+    const next = THEME_ORDER[(idx + 1) % THEME_ORDER.length];
     applyTheme(next);
     localStorage.setItem('sage-theme', next);
     set({ theme: next });

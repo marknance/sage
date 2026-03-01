@@ -31,6 +31,20 @@
   --color-text-muted: #7a99aa;
 }
 
+/* Thunder Light theme — white-dominant with Thunder accents */
+.thunder-light {
+  --color-background: #ffffff;
+  --color-surface: #f5f9fd;
+  --color-surface-elevated: #eaf3fb;
+  --color-border: #d0e0ee;
+  --color-primary: #007AC1;
+  --color-secondary: #F05133;
+  --color-text-primary: #0a1e2e;
+  --color-text-secondary: #3a5a72;
+  --color-text-muted: #7a94a8;
+  --color-warning: #FDBB30;
+}
+
 body {
   font-family: var(--font-sans);
   font-size: 14px;
