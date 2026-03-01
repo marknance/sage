@@ -23,7 +23,20 @@ const storage = multer.diskStorage({
     cb(null, `${unique}-${file.originalname}`);
   },
 });
-const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+const ALLOWED_EXTENSIONS = new Set(['.txt', '.md', '.csv', '.json', '.xml', '.html', '.log', '.pdf', '.docx']);
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!ALLOWED_EXTENSIONS.has(ext)) {
+      cb(new Error('File type not allowed'));
+      return;
+    }
+    cb(null, true);
+  },
+});
 
 const TYPE_PROMPTS: Record<string, string> = {
   research: 'Focus on accuracy, cite sources, and provide well-researched answers. ',
@@ -1236,7 +1249,9 @@ router.get('/:id/documents/:docId/download', (req, res) => {
     return;
   }
 
-  res.setHeader('Content-Disposition', `attachment; filename="${doc.filename}"`);
+  const safeFilename = doc.filename.replace(/[^\w\s.-]/g, '_').slice(0, 255);
+  const encodedFilename = encodeURIComponent(doc.filename);
+  res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`);
   res.setHeader('Content-Type', doc.file_type || 'application/octet-stream');
   fs.createReadStream(filePath).pipe(res);
 });

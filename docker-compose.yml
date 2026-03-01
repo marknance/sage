@@ -6,8 +6,10 @@ services:
     volumes:
       - sage-data:/app/server/data
     environment:
-      - JWT_SECRET=${JWT_SECRET:-sage-production-secret-change-me}
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET (min 32 chars) in .env or environment}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+      - ENCRYPTION_SALT=${ENCRYPTION_SALT:-}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - NODE_ENV=production
     restart: unless-stopped

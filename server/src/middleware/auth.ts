@@ -1,8 +1,19 @@
 import jwt from 'jsonwebtoken';
+import crypto from 'node:crypto';
 import type { Request, Response, NextFunction } from 'express';
 import { db } from '../index.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'sage-dev-secret-change-in-production';
+const JWT_SECRET: string = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (secret && secret.length >= 32) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    console.error('FATAL: JWT_SECRET environment variable must be set and at least 32 characters long.');
+    process.exit(1);
+  }
+  // Auto-generate for development — tokens won't survive restarts
+  console.warn('[DEV] No JWT_SECRET set — using auto-generated secret (tokens reset on restart).');
+  return crypto.randomBytes(32).toString('hex');
+})();
 
 interface JwtPayload {
   userId: number;
@@ -26,7 +37,7 @@ declare global {
 
 export const COOKIE_OPTIONS: import('express').CookieOptions = {
   httpOnly: true,
-  sameSite: 'lax',
+  sameSite: 'strict',
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   secure: process.env.NODE_ENV === 'production',
 };

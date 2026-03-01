@@ -14,8 +14,11 @@ const ENCRYPTED_PREFIX = 'enc:';
 
 function getEncryptionKey(): Buffer {
   if (process.env.ENCRYPTION_KEY) {
-    // Derive a 32-byte key from the env var
-    return crypto.scryptSync(process.env.ENCRYPTION_KEY, 'sage-salt', 32);
+    const salt = process.env.ENCRYPTION_SALT;
+    if (!salt || salt.length < 16) {
+      throw new Error('ENCRYPTION_SALT must be set (min 16 chars) when using ENCRYPTION_KEY');
+    }
+    return crypto.scryptSync(process.env.ENCRYPTION_KEY, salt, 32);
   }
 
   const keyPath = path.join(__dirname, '..', '..', 'data', '.encryption_key');

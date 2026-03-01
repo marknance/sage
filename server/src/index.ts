@@ -1,7 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import Database, { type Database as DatabaseType } from 'better-sqlite3';
 import bcrypt from 'bcrypt';
@@ -24,9 +26,34 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:"],
+      connectSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
+
+// CORS
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
+  .split(',')
+  .map((o) => o.trim());
+
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS: origin ${origin} not allowed`));
+    }
+  },
   credentials: true,
 }));
 app.use(express.json());
@@ -260,14 +287,15 @@ db.exec(`
   }
 }
 
-// Seed admin user if not exists
+// Seed admin user if not exists (random password, must change on first login)
 const existingAdmin = db.prepare('SELECT id FROM users WHERE email = ?').get('admin@sage.local');
 if (!existingAdmin) {
-  const passwordHash = bcrypt.hashSync('admin123', 10);
+  const tempPassword = crypto.randomBytes(16).toString('base64url');
+  const passwordHash = bcrypt.hashSync(tempPassword, 10);
   db.prepare(
-    'INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)'
-  ).run('Admin', 'admin@sage.local', passwordHash, 'admin');
-  logger.info('Seeded admin user: admin@sage.local / admin123');
+    'INSERT INTO users (username, email, password_hash, role, must_change_password) VALUES (?, ?, ?, ?, ?)'
+  ).run('Admin', 'admin@sage.local', passwordHash, 'admin', 1);
+  process.stdout.write(`\n[SAGE SETUP] Admin credentials: admin@sage.local / ${tempPassword}\n[SAGE SETUP] You must change this password on first login.\n\n`);
 }
 
 // Ensure uploads directory exists

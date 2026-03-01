@@ -2,7 +2,7 @@ import { Router } from 'express';
 import axios from 'axios';
 import { db } from '../index.js';
 import { authenticate } from '../middleware/auth.js';
-import { isValidUrl, isWithinLength } from '../lib/validate.js';
+import { isValidUrl, isSafeUrl, isWithinLength } from '../lib/validate.js';
 import { encrypt, decrypt } from '../services/encryption.js';
 
 const router = Router();
@@ -29,7 +29,7 @@ router.get('/', (req, res) => {
 });
 
 // POST / — create backend
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const userId = req.user!.id;
   const { name, type, base_url, api_key, org_id, is_active } = req.body;
 
@@ -43,8 +43,8 @@ router.post('/', (req, res) => {
   }
 
   const resolvedUrl = base_url || TYPE_DEFAULTS[type] || '';
-  if (resolvedUrl && !isValidUrl(resolvedUrl)) {
-    res.status(400).json({ error: 'Invalid base URL format' });
+  if (resolvedUrl && !(await isSafeUrl(resolvedUrl))) {
+    res.status(400).json({ error: 'Invalid or blocked base URL' });
     return;
   }
 
@@ -74,7 +74,7 @@ router.get('/:id', (req, res) => {
 });
 
 // PUT /:id — update backend
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const existing = db.prepare('SELECT * FROM ai_backends WHERE id = ? AND user_id = ?')
     .get(req.params.id, req.user!.id) as any;
   if (!existing) {
@@ -88,8 +88,8 @@ router.put('/:id', (req, res) => {
     res.status(400).json({ error: 'Name must be 1-100 characters' });
     return;
   }
-  if (base_url && !isValidUrl(base_url)) {
-    res.status(400).json({ error: 'Invalid base URL format' });
+  if (base_url && !(await isSafeUrl(base_url))) {
+    res.status(400).json({ error: 'Invalid or blocked base URL' });
     return;
   }
 

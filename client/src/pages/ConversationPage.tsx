@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, memo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { useDropzone } from 'react-dropzone';
 import { api } from '../lib/api';
 import { useConversationStore, type Message } from '../stores/conversationStore';
@@ -54,10 +55,19 @@ function getLanguageFromExt(filename: string): string | null {
 const heightCache = new Map<number, number>();
 const htmlCache = new Map<string, string>();
 
+const PURIFY_CONFIG = {
+  ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li',
+                 'h1', 'h2', 'h3', 'h4', 'blockquote', 'a', 'table', 'thead',
+                 'tbody', 'tr', 'th', 'td', 'hr', 'span', 'del', 'sup', 'sub'],
+  ALLOWED_ATTR: ['href', 'class', 'target', 'rel'],
+  ALLOW_DATA_ATTR: false as const,
+};
+
 function parseMarkdown(content: string): string {
   const cached = htmlCache.get(content);
   if (cached) return cached;
-  const html = marked.parse(content || '') as string;
+  const rawHtml = marked.parse(content || '') as string;
+  const html = DOMPurify.sanitize(rawHtml, PURIFY_CONFIG);
   htmlCache.set(content, html);
   return html;
 }
@@ -831,7 +841,7 @@ export default function ConversationPage() {
             {previewDoc.filename.endsWith('.md') ? (
               <div
                 className="flex-1 overflow-auto text-sm text-text-secondary bg-background rounded-lg p-4 prose prose-invert max-w-none"
-                dangerouslySetInnerHTML={{ __html: marked.parse(previewDoc.text || '') as string }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(previewDoc.text || '') as string, PURIFY_CONFIG) }}
               />
             ) : getLanguageFromExt(previewDoc.filename) && getLanguageFromExt(previewDoc.filename) !== 'markdown' ? (
               <pre className="flex-1 overflow-auto text-sm bg-background rounded-lg p-4">
