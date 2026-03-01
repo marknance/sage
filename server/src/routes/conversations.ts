@@ -269,6 +269,9 @@ router.put('/:id', (req, res) => {
 
 // DELETE /:id — delete conversation
 router.delete('/:id', (req, res) => {
+  // Clear FK references that lack ON DELETE CASCADE/SET NULL
+  db.prepare('UPDATE expert_memories SET source_conversation_id = NULL WHERE source_conversation_id = ?')
+    .run(req.params.id);
   const result = db.prepare('DELETE FROM conversations WHERE id = ? AND user_id = ?')
     .run(req.params.id, req.user!.id);
   if (result.changes === 0) {
@@ -288,6 +291,10 @@ router.post('/bulk-delete', (req, res) => {
   }
 
   const placeholders = ids.map(() => '?').join(',');
+  // Clear FK references that lack ON DELETE CASCADE/SET NULL
+  db.prepare(
+    `UPDATE expert_memories SET source_conversation_id = NULL WHERE source_conversation_id IN (${placeholders})`
+  ).run(...ids);
   const result = db.prepare(
     `DELETE FROM conversations WHERE id IN (${placeholders}) AND user_id = ?`
   ).run(...ids, userId);
