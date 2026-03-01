@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 @theme {
-  /* Dark theme (default) */
-  --color-background: #0f0f13;
-  --color-surface: #1a1a24;
-  --color-surface-elevated: #22223a;
-  --color-border: #2d2d3d;
-  --color-primary: #7c3aed;
-  --color-secondary: #06b6d4;
-  --color-text-primary: #f1f0ff;
-  --color-text-secondary: #9b99b8;
-  --color-text-muted: #5a5878;
+  /* Dark theme (default) — OKC Thunder */
+  --color-background: #001428;
+  --color-surface: #002044;
+  --color-surface-elevated: #003060;
+  --color-border: #0a4a7a;
+  --color-primary: #007AC1;
+  --color-secondary: #F05133;
+  --color-text-primary: #f0f4f8;
+  --color-text-secondary: #8eaec4;
+  --color-text-muted: #4a6a84;
   --color-success: #10b981;
-  --color-warning: #f59e0b;
+  --color-warning: #FDBB30;
   --color-destructive: #ef4444;
 
   /* Typography */
@@ -22,13 +22,13 @@
 
 /* Light theme overrides */
 .light {
-  --color-background: #f8f7ff;
+  --color-background: #f0f6fc;
   --color-surface: #ffffff;
-  --color-surface-elevated: #f0eeff;
-  --color-border: #e2e0f0;
-  --color-text-primary: #1a1830;
-  --color-text-secondary: #4a4870;
-  --color-text-muted: #8888a0;
+  --color-surface-elevated: #e0f0ff;
+  --color-border: #c0d8ed;
+  --color-text-primary: #001a33;
+  --color-text-secondary: #335577;
+  --color-text-muted: #7a99aa;
 }
 
 body {
