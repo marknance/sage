@@ -42,16 +42,17 @@ app.use(helmet({
 }));
 
 // CORS
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:5174')
   .split(',')
   .map((o) => o.trim());
 
 app.use(cors({
   origin: (origin, callback) => {
+    // Allow requests with no origin (same-site, curl, server-to-server)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error(`CORS: origin ${origin} not allowed`));
+      callback(null, false);
     }
   },
   credentials: true,
