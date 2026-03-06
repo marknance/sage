@@ -131,6 +131,20 @@ export default function NavBar() {
             </kbd>
           </button>
           <Link
+            to="/guide"
+            className={`px-2 py-1.5 rounded-lg transition-colors ${
+              location.pathname.startsWith('/guide')
+                ? 'text-primary bg-primary/10'
+                : 'text-text-secondary hover:text-text-primary hover:bg-background'
+            }`}
+            title="User Guide"
+          >
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 3h6a2 2 0 012 2v12a1.5 1.5 0 00-1.5-1.5H2V3z" />
+              <path d="M18 3h-6a2 2 0 00-2 2v12a1.5 1.5 0 011.5-1.5H18V3z" />
+            </svg>
+          </Link>
+          <Link
             to="/settings"
             className={`px-2 py-1.5 rounded-lg transition-colors ${
               location.pathname.startsWith('/settings')
@@ -200,6 +214,16 @@ export default function NavBar() {
               </Link>
             );
           })}
+          <Link
+            to="/guide"
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              location.pathname.startsWith('/guide')
+                ? 'bg-primary/10 text-primary'
+                : 'text-text-secondary hover:text-text-primary hover:bg-background'
+            }`}
+          >
+            Guide
+          </Link>
         </div>
       )}
     </nav>

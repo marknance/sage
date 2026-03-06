@@ -18,6 +18,7 @@ const BackendsPage = lazy(() => import('./pages/BackendsPage'));
 const BackendFormPage = lazy(() => import('./pages/BackendFormPage'));
 const CategoriesPage = lazy(() => import('./pages/CategoriesPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const GuidePage = lazy(() => import('./pages/GuidePage'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,6 +56,7 @@ function App() {
             <Route path="/backends/new" element={<BackendFormPage />} />
             <Route path="/backends/:id" element={<BackendFormPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/guide" element={<GuidePage />} />
             <Route path="/profile" element={<Navigate to="/settings" replace />} />
             <Route path="/admin" element={<Navigate to="/settings" replace />} />
             <Route path="/admin/*" element={<Navigate to="/settings" replace />} />
