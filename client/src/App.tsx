@@ -35,7 +35,9 @@ function App() {
       <ConfirmModal />
       <BrowserRouter>
         <ErrorBoundary>
+        <div className="min-h-screen flex flex-col">
         <Suspense fallback={<Spinner />}>
+        <div className="flex-1">
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
@@ -62,7 +64,12 @@ function App() {
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </div>
         </Suspense>
+        <footer className="py-3 text-center text-xs text-text-muted border-t border-border">
+          v0.09 Beta
+        </footer>
+        </div>
         </ErrorBoundary>
       </BrowserRouter>
     </QueryClientProvider>
