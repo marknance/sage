@@ -19,7 +19,7 @@ export default function ProtectedRoute({ requiredRole }: ProtectedRouteProps) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="flex-1 flex items-center justify-center bg-background">
         <p className="text-text-secondary">Loading...</p>
       </div>
     );

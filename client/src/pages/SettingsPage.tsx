@@ -185,7 +185,7 @@ export default function SettingsPage() {
   const contentTotalPages = Math.ceil(contentTotal / contentLimit);
 
   return (
-    <div className="min-h-screen bg-background px-4 py-8">
+    <div className="flex-1 bg-background px-4 py-8">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-2xl font-semibold text-text-primary mb-6">Settings</h1>
 

@@ -130,7 +130,7 @@ export default function BackendFormPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background px-4 py-8">
+    <div className="flex-1 bg-background px-4 py-8">
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center gap-3 mb-6">
           <Link to="/backends" className="text-text-muted hover:text-text-primary transition-colors">

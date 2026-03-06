@@ -240,7 +240,7 @@ export default function ExpertDetailPage() {
   const availableCategories = allCategories.filter((c) => !assignedCategoryIds.has(c.id));
 
   return (
-    <div className="min-h-screen bg-background px-4 py-8">
+    <div className="flex-1 bg-background px-4 py-8">
       <div className="max-w-2xl mx-auto space-y-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">

@@ -424,7 +424,7 @@ export default function ConversationPage() {
 
   if (!currentConversation) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex-1 bg-background flex items-center justify-center">
         <p className="text-text-muted">Conversation not found.</p>
       </div>
     );

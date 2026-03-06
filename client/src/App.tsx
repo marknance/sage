@@ -37,7 +37,7 @@ function App() {
         <ErrorBoundary>
         <div className="min-h-screen flex flex-col">
         <Suspense fallback={<Spinner />}>
-        <div className="flex-1">
+        <div className="flex-1 flex flex-col">
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />

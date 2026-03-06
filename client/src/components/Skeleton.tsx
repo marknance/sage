@@ -21,7 +21,7 @@ export function SkeletonGrid() {
 
 export function Spinner() {
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
+    <div className="flex-1 bg-background flex items-center justify-center">
       <svg className="w-8 h-8 animate-spin text-primary" viewBox="0 0 24 24" fill="none">
         <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeLinecap="round" />
       </svg>

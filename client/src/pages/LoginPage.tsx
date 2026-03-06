@@ -25,7 +25,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+    <div className="flex-1 flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm bg-surface rounded-xl border border-border p-8">
         <h1 className="text-2xl font-semibold text-text-primary mb-6 text-center">Sign In</h1>
 
