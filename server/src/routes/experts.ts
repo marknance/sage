@@ -475,6 +475,9 @@ router.get('/:id/usage', (req, res) => {
 
 // DELETE /:id — delete expert
 router.delete('/:id', (req, res) => {
+  // Clear FK references that lack ON DELETE CASCADE/SET NULL
+  db.prepare('DELETE FROM conversation_experts WHERE expert_id = ?').run(req.params.id);
+  db.prepare('UPDATE messages SET expert_id = NULL WHERE expert_id = ?').run(req.params.id);
   const result = db.prepare('DELETE FROM experts WHERE id = ? AND user_id = ?').run(req.params.id, req.user!.id);
   if (result.changes === 0) {
     res.status(404).json({ error: 'Expert not found' });
