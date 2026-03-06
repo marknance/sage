@@ -321,6 +321,12 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/tags', tagsRouter);
 
+// Serve static client build in production
+const publicDir = path.join(__dirname, '..', 'public');
+if (fs.existsSync(publicDir)) {
+  app.use(express.static(publicDir));
+}
+
 // Health endpoint
 app.get('/api/health', (_req, res) => {
   try {
@@ -334,10 +340,42 @@ app.get('/api/health', (_req, res) => {
   }
 });
 
+// SPA fallback: serve index.html for non-API routes (must come after API routes)
+if (fs.existsSync(publicDir)) {
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(publicDir, 'index.html'));
+  });
+}
+
+// Global error handler
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  logger.error({ err: err.message, stack: err.stack }, 'Unhandled error');
+  res.status(500).json({ error: 'Internal server error' });
+});
+
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   logger.info({ port: PORT }, `Sage server running on http://localhost:${PORT}`);
   logger.info({ dbPath }, 'Database initialized');
 });
+
+// Graceful shutdown
+function shutdown(signal: string) {
+  logger.info({ signal }, 'Received shutdown signal');
+  server.close(() => {
+    logger.info('HTTP server closed');
+    db.close();
+    logger.info('Database closed');
+    process.exit(0);
+  });
+  // Force exit after 10s if connections hang
+  setTimeout(() => {
+    logger.warn('Forced shutdown after timeout');
+    process.exit(1);
+  }, 10_000);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 export { app, db };

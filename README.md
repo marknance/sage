@@ -29,6 +29,7 @@ sage/
 │   │   ├── pages/
 │   │   ├── hooks/
 │   │   ├── lib/
+│   │   ├── stores/
 │   │   ├── App.tsx
 │   │   ├── main.tsx
 │   │   └── index.css
@@ -39,13 +40,17 @@ sage/
 │   ├── src/
 │   │   ├── middleware/
 │   │   ├── routes/
+│   │   ├── services/
+│   │   ├── lib/
 │   │   └── index.ts
 │   ├── data/        # SQLite database
 │   └── package.json
-└── README.md
+├── Dockerfile
+├── docker-compose.yml
+└── .env.example
 ```
 
-## Setup
+## Local Development
 
 1. Install dependencies:
    ```bash
@@ -65,15 +70,61 @@ sage/
 
 4. Open http://localhost:5173 in your browser.
 
-### Default Admin Account
-- Email: `admin@sage.local`
-- Password: `admin123`
+### First Login
+
+On first run, Sage generates a random admin password and prints it to the server console:
+
+```
+[SAGE SETUP] Admin credentials: admin@sage.local / <random-password>
+[SAGE SETUP] You must change this password on first login.
+```
+
+Look for this in the terminal where you started the server.
+
+## Production Deployment (Docker)
+
+1. Copy and configure environment variables:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Set the required `JWT_SECRET` (minimum 32 characters):
+   ```bash
+   # Generate a secure secret:
+   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+   ```
+
+3. Optionally set `ENCRYPTION_KEY` and `ENCRYPTION_SALT` to encrypt stored API keys at rest.
+
+4. Build and run:
+   ```bash
+   docker compose up -d
+   ```
+
+5. Open http://localhost:3000 in your browser.
+
+6. Check the container logs for the initial admin password:
+   ```bash
+   docker compose logs sage | grep "SAGE SETUP"
+   ```
+
+### Health Check
+
+The container includes a health check at `/api/health` that verifies database connectivity. Monitor it with:
+```bash
+docker inspect --format='{{.State.Health.Status}}' sage-sage-1
+```
 
 ## Environment Variables
 
-Create a `.env` file in the `server/` directory for optional configuration:
+See `.env.example` for all options. Summary:
 
-```
-PORT=3001
-JWT_SECRET=your-secret-key
-```
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `JWT_SECRET` | Yes (prod) | Auto-generated (dev) | JWT signing secret, min 32 chars |
+| `PORT` | No | `3001` | Server port |
+| `ENCRYPTION_KEY` | No | — | AES-256 key for API key encryption, min 32 chars |
+| `ENCRYPTION_SALT` | No | — | Salt for key derivation, min 16 chars (required if ENCRYPTION_KEY is set) |
+| `ALLOWED_ORIGINS` | No | `localhost:5173,5174` (dev) / `localhost:3000` (Docker) | CORS allowed origins |
+| `LOG_LEVEL` | No | `info` | Logging level |
+| `NODE_ENV` | No | — | Set to `production` in Docker |
